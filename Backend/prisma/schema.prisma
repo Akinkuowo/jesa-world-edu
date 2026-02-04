@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+model School {
+  id             String   @id @default(cuid())
+  schoolNumber   String   @unique @map("school_number")
+  name           String
+  address        String?
+  phone          String?
+  email          String?  @unique
+  isActive       Boolean  @default(true)
+  
+  // Quotas
+  maxStudents    Int      @default(100) @map("max_students")
+  maxTeachers    Int      @default(10)  @map("max_teachers")
+
+  // Validity
+  validUntil         DateTime  @default(dbgenerated("NOW() + interval '4 months'")) @map("valid_until")
+  lastReactivatedAt  DateTime? @map("last_reactivated_at")
+  
+  users          User[]
+  examSchedules  ExamSchedule[]
+  
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("schools")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String?  @unique
+  studentId         String?  @unique @map("student_id")
+  password          String
+  firstName         String   @map("first_name")
+  lastName          String   @map("last_name")
+  role              Role     @default(STUDENT)
+  isActive          Boolean  @default(true)
+  isEmailVerified   Boolean  @default(false) @map("is_email_verified")
+  verificationCode  String?  @map("verification_code")
+  twoFactorCode     String?  @map("two_factor_code")
+  twoFactorExpires  DateTime? @map("two_factor_expires")
+  
+  // Relation to School
+  schoolId          String?  @map("school_id")
+  school            School?  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  // Profile info
+  phone             String?
+  address           String?
+  studentClass      String?  @map("student_class")
+  subjects          String[]
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  lastLogin         DateTime? @map("last_login")
+
+  @@map("users")
+
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  section   String   // "JUNIOR" or "SENIOR"
+  category  String?  // "Science", "Arts", "Commercial", "Compulsory", "Trade" (for Senior)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("subjects")
+}
+
+model ExamSchedule {
+  id        String   @id @default(cuid())
+  subject   String
+  class     String
+  date      String
+  time      String
+  duration  String
+  type      String   // e.g. "First Term", "MOCK", "WAEC"
+  
+  schoolId  String   @map("school_id")
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("exam_schedules")
+}
