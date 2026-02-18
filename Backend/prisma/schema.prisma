@@ -33,6 +33,10 @@ model School {
   
   users          User[]
   examSchedules  ExamSchedule[]
+  gradingSystems GradingSystem[]
+  lessonNotes    LessonNote[]
+  assignments    Assignment[]
+  examQuestions  ExamQuestion[]
   
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -64,6 +68,11 @@ model User {
   address           String?
   studentClass      String?  @map("student_class")
   subjects          String[]
+
+  results           StudentResult[] @relation("StudentResults")
+  lessonNotes       LessonNote[]    @relation("TeacherNotes")
+  assignments       Assignment[]    @relation("TeacherAssignments")
+  examQuestions     ExamQuestion[]  @relation("TeacherExams")
   
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -101,4 +110,91 @@ model ExamSchedule {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("exam_schedules")
+}
+
+model GradingSystem {
+  id        String   @id @default(cuid())
+  grade     String   // e.g. "A", "B", "C"
+  minScore  Int      @map("min_score")
+  maxScore  Int      @map("max_score")
+  remark    String?  // e.g. "Excellent", "Very Good"
+  
+  schoolId  String   @map("school_id")
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("grading_systems")
+}
+
+model StudentResult {
+  id        String   @id @default(cuid())
+  studentId String   @map("student_id")
+  student   User     @relation("StudentResults", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  subject   String
+  marks     Float
+  term      String   // e.g. "First Term"
+  class     String   // The class student was in
+  
+  schoolId  String   @map("school_id")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("student_results")
+}
+
+model LessonNote {
+  id        String   @id @default(cuid())
+  teacherId String   @map("teacher_id")
+  teacher   User     @relation("TeacherNotes", fields: [teacherId], references: [id], onDelete: Cascade)
+  subject   String
+  topic     String
+  content   String   @db.Text
+  class     String
+  schoolId  String   @map("school_id")
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("lesson_notes")
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  teacherId   String   @map("teacher_id")
+  teacher     User     @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Cascade)
+  title       String
+  description String   @db.Text
+  dueDate     DateTime @map("due_date")
+  class       String
+  subject     String
+  schoolId    String   @map("school_id")
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("assignments")
+}
+
+model ExamQuestion {
+  id          String   @id @default(cuid())
+  teacherId   String   @map("teacher_id")
+  teacher     User     @relation("TeacherExams", fields: [teacherId], references: [id], onDelete: Cascade)
+  subject     String
+  class       String
+  type        String   // "MCQ" or "THEORY"
+  question    String   @db.Text
+  options     Json?    // For MCQ
+  answer      String   @db.Text
+  marks       Float    @default(1.0)
+  term        String   // e.g. "First Term"
+  schoolId    String   @map("school_id")
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("exam_questions")
 }

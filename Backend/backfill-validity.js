@@ -17,7 +17,7 @@ async function backfillValidity() {
                 lastReactivatedAt: true
             }
         });
-
+                
         console.log(`📊 Found ${schools.length} school(s) in the database.\n`);
 
         if (schools.length === 0) {

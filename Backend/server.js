@@ -6,6 +6,8 @@ const jwt = require("jsonwebtoken");
 const multipart = require("@fastify/multipart");
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require("nodemailer");
+const mammoth = require("mammoth");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -817,6 +819,98 @@ async function start() {
     }
   });
 
+  // Get Enrollment Trend
+  app.get("/api/admin/enrollment-trend", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const schoolId = request.user.schoolId;
+
+    try {
+      // Get all students for this school
+      const students = await prisma.user.findMany({
+        where: { schoolId, role: "STUDENT" },
+        select: { createdAt: true }
+      });
+
+      // Group by month for the last 12 months
+      const now = new Date();
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const enrollmentData = [];
+
+      for (let i = 11; i >= 0; i--) {
+        const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const monthEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+        const count = students.filter(s => {
+          const createdDate = new Date(s.createdAt);
+          return createdDate >= monthStart && createdDate <= monthEnd;
+        }).length;
+
+        enrollmentData.push({
+          month: monthNames[targetDate.getMonth()],
+          count
+        });
+      }
+
+      return { enrollmentData };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch enrollment trend" });
+    }
+  });
+
+  // Bulk Promote/Demote Students
+  app.post("/api/admin/users/bulk-promote", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    const { studentIds, newClass } = request.body;
+    const schoolId = request.user.schoolId;
+
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+      return reply.code(400).send({ error: "Student IDs array is required" });
+    }
+
+    if (!newClass) {
+      return reply.code(400).send({ error: "New class is required" });
+    }
+
+    try {
+      // Verify all students belong to this school
+      const students = await prisma.user.findMany({
+        where: {
+          id: { in: studentIds },
+          schoolId,
+          role: "STUDENT"
+        }
+      });
+
+      if (students.length !== studentIds.length) {
+        return reply.code(400).send({ error: "Some students not found or don't belong to your school" });
+      }
+
+      // Update all students
+      const result = await prisma.user.updateMany({
+        where: {
+          id: { in: studentIds },
+          schoolId
+        },
+        data: {
+          studentClass: newClass
+        }
+      });
+
+      return {
+        message: `Successfully updated ${result.count} students to ${newClass}`,
+        count: result.count
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to bulk promote students" });
+    }
+  });
+
   // --- Exam Schedule Routes ---
 
   // List Exam Schedules
@@ -920,6 +1014,538 @@ async function start() {
     }
   });
 
+  // --- Grading System Routes ---
+
+  // List Grading Rules
+  app.get("/api/admin/grading", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const schoolId = request.user.schoolId;
+
+    try {
+      const grading = await prisma.gradingSystem.findMany({
+        where: { schoolId },
+        orderBy: { minScore: 'desc' }
+      });
+      return grading;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch grading system" });
+    }
+  });
+
+  // Add Grading Rule
+  app.post("/api/admin/grading", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const schoolId = request.user.schoolId;
+    const { grade, minScore, maxScore, remark } = request.body;
+
+    try {
+      const newGrade = await prisma.gradingSystem.create({
+        data: {
+          grade,
+          minScore: parseInt(minScore),
+          maxScore: parseInt(maxScore),
+          remark,
+          schoolId
+        }
+      });
+      return newGrade;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to create grading rule" });
+    }
+  });
+
+  // Update Grading Rule
+  app.put("/api/admin/grading/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const { id } = request.params;
+    const schoolId = request.user.schoolId;
+    const { grade, minScore, maxScore, remark } = request.body;
+
+    try {
+      const updatedGrade = await prisma.gradingSystem.update({
+        where: { id, schoolId },
+        data: {
+          grade,
+          minScore: parseInt(minScore),
+          maxScore: parseInt(maxScore),
+          remark
+        }
+      });
+      return updatedGrade;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to update grading rule" });
+    }
+  });
+
+  // Delete Grading Rule
+  app.delete("/api/admin/grading/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const { id } = request.params;
+    const schoolId = request.user.schoolId;
+
+    try {
+      await prisma.gradingSystem.delete({
+        where: { id, schoolId }
+      });
+      return { success: true };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to delete grading rule" });
+    }
+  });
+
+  // --- Student Results Routes ---
+
+  // Record Student Result
+  app.post("/api/admin/results", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "TEACHER" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const schoolId = request.user.schoolId;
+    const { studentId, subject, marks, term, class: studentClass } = request.body;
+
+    try {
+      const result = await prisma.studentResult.create({
+        data: {
+          studentId,
+          subject,
+          marks: parseFloat(marks),
+          term,
+          class: studentClass,
+          schoolId
+        }
+      });
+      return result;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to record student result" });
+    }
+  });
+
+  // List Student Results (for Admin/Teacher)
+  app.get("/api/admin/results", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "TEACHER" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const schoolId = request.user.schoolId;
+    const { studentClass, term, subject } = request.query;
+
+    const where = { schoolId };
+    if (studentClass) where.class = studentClass;
+    if (term) where.term = term;
+    if (subject) where.subject = subject;
+
+    try {
+      const results = await prisma.studentResult.findMany({
+        where,
+        include: {
+          student: {
+            select: { firstName: true, lastName: true, studentId: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      return results;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch student results" });
+    }
+  });
+
+  // --- Settings & Profile Routes (Admin) ---
+
+  // Get School Details
+  app.get("/api/admin/school", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const schoolId = request.user.schoolId;
+
+    try {
+      const school = await prisma.school.findUnique({
+        where: { id: schoolId }
+      });
+      return school;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch school details" });
+    }
+  });
+
+  // Update School Details
+  app.put("/api/admin/school", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const schoolId = request.user.schoolId;
+    const { name, address, phone, email } = request.body;
+
+    try {
+      const updatedSchool = await prisma.school.update({
+        where: { id: schoolId },
+        data: { name, address, phone, email }
+      });
+      return updatedSchool;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to update school details" });
+    }
+  });
+
+  // Get Admin Profile
+  app.get("/api/admin/profile", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { id: true, email: true, firstName: true, lastName: true, role: true, phone: true, address: true, createdAt: true }
+      });
+      return user;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch profile" });
+    }
+  });
+
+  // Update Admin Profile
+  app.put("/api/admin/profile", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const { firstName, lastName, phone, address, email } = request.body;
+
+    try {
+      const user = await prisma.user.update({
+        where: { id: request.user.id },
+        data: { firstName, lastName, phone, address, email }
+      });
+      return { message: "Profile updated successfully", user: { firstName: user.firstName, lastName: user.lastName, email: user.email } };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to update profile" });
+    }
+  });
+
+  // Change Admin Password
+  app.post("/api/admin/change-password", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const { currentPassword, newPassword } = request.body;
+
+    try {
+      const user = await prisma.user.findUnique({ where: { id: request.user.id } });
+      if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+        return reply.code(400).send({ error: "Incorrect current password" });
+      }
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await prisma.user.update({
+        where: { id: request.user.id },
+        data: { password: hashedPassword }
+      });
+      return { message: "Password updated successfully" };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to change password" });
+    }
+  });
+
+  // --- Teacher Specialized Routes ---
+
+  // Get Students Offering Teacher's Subjects
+  app.get("/api/teacher/students", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    const { subject } = request.query;
+    const schoolId = request.user.schoolId;
+
+    try {
+      // Get teacher's subjects
+      const teacher = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { subjects: true }
+      });
+
+      if (!teacher || !teacher.subjects || teacher.subjects.length === 0) {
+        return [];
+      }
+
+      // Determine which subjects to filter by
+      const filterSubjects = subject ? [subject] : teacher.subjects;
+
+      // Find students in the same school who offer at least one of these subjects
+      const students = await prisma.user.findMany({
+        where: {
+          schoolId,
+          role: "STUDENT",
+          isActive: true,
+          subjects: {
+            hasSome: filterSubjects
+          }
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          studentId: true,
+          studentClass: true,
+          subjects: true,
+          phone: true,
+          address: true
+        },
+        orderBy: [
+          { studentClass: 'asc' },
+          { lastName: 'asc' }
+        ]
+      });
+
+      return {
+        students,
+        teacherSubjects: teacher.subjects
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch students" });
+    }
+  });
+
+  // --- Teacher Tool Routes ---
+
+  // Lesson Notes
+  app.get("/api/teacher/lesson-notes", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER" && request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const teacherId = request.user.id;
+    try {
+      const notes = await prisma.lessonNote.findMany({
+        where: { teacherId },
+        orderBy: { createdAt: 'desc' }
+      });
+      return notes;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch lesson notes" });
+    }
+  });
+
+  app.post("/api/teacher/lesson-notes", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { subject, topic, content, class: studentClass } = request.body;
+    try {
+      const note = await prisma.lessonNote.create({
+        data: {
+          subject,
+          topic,
+          content,
+          class: studentClass,
+          teacherId: request.user.id,
+          schoolId: request.user.schoolId
+        }
+      });
+      return note;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to create lesson note" });
+    }
+  });
+
+  // AI Lesson Note Generation (Placeholder/Mock)
+  app.post("/api/teacher/lesson-notes/generate", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { subject, topic, class: studentClass } = request.body;
+
+    try {
+      // Mocking AI response for now. In a real scenario, we'd call OpenAI/DeepSeek API here.
+      const aiContent = `
+        <h3>Lesson Plan: ${topic} (${subject})</h3>
+        <p><strong>Objective:</strong> Students will understand the core concepts of ${topic}.</p>
+        <p><strong>Outline:</strong></p>
+        <ul>
+          <li>Introduction to ${topic}</li>
+          <li>Key Mechanisms and Principles</li>
+          <li>Real-world applications</li>
+          <li>Conclusion and Review</li>
+        </ul>
+        <p>This note was generated via AI based on your topic and subject for ${studentClass}.</p>
+      `;
+
+      return { content: aiContent };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "AI Generation failed" });
+    }
+  });
+
+  // Gemini AI Chat
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  app.post("/api/teacher/ai/chat", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { message } = request.body;
+
+    try {
+      const prompt = `You are a professional educational assistant for a school management system. 
+      Help the teacher with their request: "${message}". 
+      If they want a lesson note, provide a structured note with Introduction, Core Content, and Summary.
+      If they want exam questions, provide clear and challenging questions.
+      Keep the tone professional and helpful.`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      return { reply: text };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "AI Assistant is temporarily unavailable. Please try again." });
+    }
+  });
+
+  // Assignments
+  app.get("/api/teacher/assignments", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER" && request.user.role !== "ADMIN" && request.user.role !== "STUDENT") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const { class: studentClass } = request.query;
+    const where = { schoolId: request.user.schoolId };
+
+    if (request.user.role === "TEACHER") {
+      where.teacherId = request.user.id;
+    } else if (request.user.role === "STUDENT") {
+      where.class = request.user.studentClass;
+    } else if (studentClass) {
+      where.class = studentClass;
+    }
+
+    try {
+      const assignments = await prisma.assignment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' }
+      });
+      return assignments;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch assignments" });
+    }
+  });
+
+  app.post("/api/teacher/assignments", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { title, description, dueDate, class: studentClass, subject } = request.body;
+    try {
+      const assignment = await prisma.assignment.create({
+        data: {
+          title,
+          description,
+          dueDate: new Date(dueDate),
+          class: studentClass,
+          subject,
+          teacherId: request.user.id,
+          schoolId: request.user.schoolId
+        }
+      });
+      return assignment;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to create assignment" });
+    }
+  });
+
+  // Exam Questions
+  app.get("/api/teacher/exams/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER" && request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+    const { subject, class: studentClass, term } = request.query;
+    const where = { schoolId: request.user.schoolId };
+    if (subject) where.subject = subject;
+    if (studentClass) where.class = studentClass;
+    if (term) where.term = term;
+
+    try {
+      const questions = await prisma.examQuestion.findMany({
+        where,
+        orderBy: { createdAt: 'asc' }
+      });
+      return questions;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch exam questions" });
+    }
+  });
+
+  app.post("/api/teacher/exams/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { subject, class: studentClass, type, question, options, answer, marks, term } = request.body;
+    try {
+      const examQuestion = await prisma.examQuestion.create({
+        data: {
+          subject,
+          class: studentClass,
+          type,
+          question,
+          options,
+          answer,
+          marks: parseFloat(marks) || 1.0,
+          term,
+          teacherId: request.user.id,
+          schoolId: request.user.schoolId
+        }
+      });
+      return examQuestion;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to create exam question" });
+    }
+  });
+
+  // Bulk Upload Exam Questions (DOCX)
+  app.post("/api/teacher/exams/bulk-upload", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const data = await request.file();
+    if (!data) return reply.code(400).send({ error: "No file provided" });
+
+    try {
+      const buffer = await data.toBuffer();
+      const result = await mammoth.extractRawText({ buffer });
+      const text = result.value;
+
+      // Basic parsing logic: Split by lines, look for question patterns
+      // This is a naive implementation; ideally, we'd use AI or more robust patterns
+      const lines = text.split('\n').filter(l => l.trim() !== '');
+      const questions = [];
+      let currentQuestion = null;
+
+      for (const line of lines) {
+        if (line.match(/^\d+\./)) { // Starts with "1." or "2." etc.
+          if (currentQuestion) questions.push(currentQuestion);
+          currentQuestion = {
+            question: line.replace(/^\d+\.\s*/, ''),
+            type: "MCQ",
+            options: [],
+            answer: "",
+            marks: 1
+          };
+        } else if (line.match(/^[A-D]\)/) || line.match(/^[A-D]\./)) {
+          if (currentQuestion) {
+            currentQuestion.options.push(line.replace(/^[A-D][\.\)]\s*/, ''));
+          }
+        }
+      }
+      if (currentQuestion) questions.push(currentQuestion);
+
+      return { questions };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to parse document" });
+    }
+  });
+
   // --- Student/Parent Routes ---
 
   // Get Student Profile (for parents)
@@ -956,17 +1582,31 @@ async function start() {
     }
   });
 
-  // Get Student Results (placeholder for future grading system)
+  // Get Student Results
   app.get("/api/student/results", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "STUDENT") {
       return reply.code(403).send({ error: "Forbidden" });
     }
 
-    // Placeholder - will be implemented when grading system is added
-    return {
-      message: "Results feature coming soon",
-      results: []
-    };
+    try {
+      const results = await prisma.studentResult.findMany({
+        where: { studentId: request.user.id },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      const grading = await prisma.gradingSystem.findMany({
+        where: { schoolId: request.user.schoolId },
+        orderBy: { minScore: 'desc' }
+      });
+
+      return {
+        results,
+        grading
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch results" });
+    }
   });
 
   // Get Student Attendance (placeholder for future attendance system)
