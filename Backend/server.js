@@ -1,3 +1,4 @@
+require('dotenv').config();
 const Fastify = require("fastify");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
@@ -1383,14 +1384,20 @@ async function start() {
   });
 
   // Gemini AI Chat
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
   app.post("/api/teacher/ai/chat", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
     const { message } = request.body;
 
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("CRITICAL: GEMINI_API_KEY is missing from process.env");
+      return reply.code(500).send({ error: "AI Configuration error. Please check server environment." });
+    }
+
     try {
+      console.log("AI Chat Request received. Using Key:", process.env.GEMINI_API_KEY.substring(0, 10) + "...");
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
       const prompt = `You are a professional educational assistant for a school management system. 
       Help the teacher with their request: "${message}". 
       If they want a lesson note, provide a structured note with Introduction, Core Content, and Summary.
@@ -1403,8 +1410,48 @@ async function start() {
 
       return { reply: text };
     } catch (err) {
+      console.error("DETAILED AI ERROR:", err);
+      if (err.status === 404) {
+        console.error("Model 2.0-flash not found, falling back to 1.5-flash...");
+        try {
+          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+          const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+          const result = await fallbackModel.generateContent(message);
+          const response = await result.response;
+          return { reply: response.text() };
+        } catch (fallbackErr) {
+          console.error("Fallback also failed:", fallbackErr);
+        }
+      }
       app.log.error(err);
-      return reply.code(500).send({ error: "AI Assistant is temporarily unavailable. Please try again." });
+      return reply.code(500).send({ error: `AI Error: ${err.message || "Unknown error"}. Please try again.` });
+    }
+  });
+
+  // Teacher Data (Subjects & Classes)
+  app.get("/api/teacher/my-data", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      // Get teacher's subjects
+      const teacher = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { subjects: true }
+      });
+
+      // Simple list of classes
+      const classes = [
+        "JSS 1", "JSS 2", "JSS 3",
+        "SSS 1", "SSS 2", "SSS 3"
+      ];
+
+      return {
+        subjects: teacher?.subjects || [],
+        classes: classes
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch teacher data" });
     }
   });
 
@@ -1482,6 +1529,8 @@ async function start() {
   app.post("/api/teacher/exams/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
     const { subject, class: studentClass, type, question, options, answer, marks, term } = request.body;
+    console.log("Exam Question Create Request:", { subject, studentClass, type, term });
+
     try {
       const examQuestion = await prisma.examQuestion.create({
         data: {
@@ -1492,15 +1541,17 @@ async function start() {
           options,
           answer,
           marks: parseFloat(marks) || 1.0,
-          term,
+          term: term || "First Term",
           teacherId: request.user.id,
           schoolId: request.user.schoolId
         }
       });
+      console.log("Exam Question Created Successfully:", examQuestion.id);
       return examQuestion;
     } catch (err) {
+      console.error("Exam Question Create Error:", err);
       app.log.error(err);
-      return reply.code(500).send({ error: "Failed to create exam question" });
+      return reply.code(500).send({ error: `Failed to create exam question: ${err.message}` });
     }
   });
 
