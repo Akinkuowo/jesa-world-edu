@@ -38,6 +38,36 @@ const sendEmail = async (to, subject, html) => {
   }
 };
 
+// Helper: Robust AI Content Generation with Fallback
+const generateAiContent = async (prompt) => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is missing");
+  }
+
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"];
+  let lastError = null;
+
+  for (const modelName of models) {
+    try {
+      console.log(`Attempting AI generation with model: ${modelName}`);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+    } catch (err) {
+      lastError = err;
+      console.warn(`Model ${modelName} failed: ${err.message}`);
+      // If it's a quota error (429) or model not found (404), try next model
+      if (err.status === 429 || err.status === 404) continue;
+      // For other errors, break and throw
+      break;
+    }
+  }
+
+  throw lastError || new Error("AI Generation failed across all models");
+};
+
 // Helper: Generate Unique School Number
 const generateSchoolNumber = async () => {
   let unique = false;
@@ -1351,8 +1381,39 @@ async function start() {
       });
       return note;
     } catch (err) {
+      console.error("LessonNote Create Error:", err);
       app.log.error(err);
-      return reply.code(500).send({ error: "Failed to create lesson note" });
+      return reply.code(500).send({ error: `Failed to create lesson note: ${err.message}` });
+    }
+  });
+
+  app.put("/api/teacher/lesson-notes/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { id } = request.params;
+    const { subject, topic, content, class: studentClass } = request.body;
+    try {
+      const note = await prisma.lessonNote.update({
+        where: { id, teacherId: request.user.id },
+        data: { subject, topic, content, class: studentClass }
+      });
+      return note;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to update lesson note" });
+    }
+  });
+
+  app.delete("/api/teacher/lesson-notes/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { id } = request.params;
+    try {
+      await prisma.lessonNote.delete({
+        where: { id, teacherId: request.user.id }
+      });
+      return { success: true };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to delete lesson note" });
     }
   });
 
@@ -1388,42 +1449,17 @@ async function start() {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
     const { message } = request.body;
 
-    if (!process.env.GEMINI_API_KEY) {
-      console.error("CRITICAL: GEMINI_API_KEY is missing from process.env");
-      return reply.code(500).send({ error: "AI Configuration error. Please check server environment." });
-    }
-
     try {
-      console.log("AI Chat Request received. Using Key:", process.env.GEMINI_API_KEY.substring(0, 10) + "...");
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
       const prompt = `You are a professional educational assistant for a school management system. 
       Help the teacher with their request: "${message}". 
       If they want a lesson note, provide a structured note with Introduction, Core Content, and Summary.
       If they want exam questions, provide clear and challenging questions.
       Keep the tone professional and helpful.`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
+      const text = await generateAiContent(prompt);
       return { reply: text };
     } catch (err) {
-      console.error("DETAILED AI ERROR:", err);
-      if (err.status === 404) {
-        console.error("Model 2.0-flash not found, falling back to 1.5-flash...");
-        try {
-          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-          const fallbackModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-          const result = await fallbackModel.generateContent(message);
-          const response = await result.response;
-          return { reply: response.text() };
-        } catch (fallbackErr) {
-          console.error("Fallback also failed:", fallbackErr);
-        }
-      }
-      app.log.error(err);
+      console.error("AI Chat Error:", err);
       return reply.code(500).send({ error: `AI Error: ${err.message || "Unknown error"}. Please try again.` });
     }
   });
@@ -1452,6 +1488,60 @@ async function start() {
     } catch (err) {
       app.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch teacher data" });
+    }
+  });
+
+  // Teacher Dashboard Stats
+  app.get("/api/teacher/dashboard-stats", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const teacherId = request.user.id;
+      const schoolId = request.user.schoolId;
+
+      // Get teacher's subjects
+      const teacher = await prisma.user.findUnique({
+        where: { id: teacherId },
+        select: { subjects: true }
+      });
+
+      const subjects = teacher?.subjects || [];
+
+      // 1. Student Count (Students who offer at least one of teacher's subjects)
+      const studentCount = await prisma.user.count({
+        where: {
+          schoolId,
+          role: "STUDENT",
+          isActive: true,
+          subjects: {
+            hasSome: subjects
+          }
+        }
+      });
+
+      // 2. Lesson Notes Count
+      const lessonNotesCount = await prisma.lessonNote.count({
+        where: { teacherId }
+      });
+
+      // 3. Assignments Count
+      const assignmentsCount = await prisma.assignment.count({
+        where: { teacherId }
+      });
+
+      // 4. Classes Today (Mocked or based on ExamSchedule if applicable)
+      // For now, let's just return counts for the main stats.
+      // We can add more specific logic if needed.
+
+      return {
+        studentCount,
+        lessonNotesCount,
+        assignmentsCount,
+        classesTodayCount: 0 // Placeholder for now
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch dashboard stats" });
     }
   });
 
@@ -1550,8 +1640,37 @@ async function start() {
       return examQuestion;
     } catch (err) {
       console.error("Exam Question Create Error:", err);
-      app.log.error(err);
       return reply.code(500).send({ error: `Failed to create exam question: ${err.message}` });
+    }
+  });
+
+  app.put("/api/teacher/exams/questions/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { id } = request.params;
+    const { subject, class: studentClass, type, question, options, answer, marks, term } = request.body;
+    try {
+      const examQuestion = await prisma.examQuestion.update({
+        where: { id, teacherId: request.user.id },
+        data: { subject, class: studentClass, type, question, options, answer, marks: parseFloat(marks) || 1.0, term: term || "First Term" }
+      });
+      return examQuestion;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to update exam question" });
+    }
+  });
+
+  app.delete("/api/teacher/exams/questions/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { id } = request.params;
+    try {
+      await prisma.examQuestion.delete({
+        where: { id, teacherId: request.user.id }
+      });
+      return { success: true };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to delete exam question" });
     }
   });
 
@@ -1563,37 +1682,73 @@ async function start() {
 
     try {
       const buffer = await data.toBuffer();
-      const result = await mammoth.extractRawText({ buffer });
-      const text = result.value;
+      // Use convertToHtml to keep bold/underline markers
+      const result = await mammoth.convertToHtml({ buffer });
+      const html = result.value;
 
-      // Basic parsing logic: Split by lines, look for question patterns
-      // This is a naive implementation; ideally, we'd use AI or more robust patterns
-      const lines = text.split('\n').filter(l => l.trim() !== '');
-      const questions = [];
-      let currentQuestion = null;
+      const prompt = `
+        Extract exam questions from the following HTML content of a document.
+        Return ONLY a valid JSON array of objects. Do not include any markdown formatting like \`\`\`json.
+        
+        Each object in the array must follow this schema:
+        {
+          "question": "The text of the question",
+          "type": "MCQ" or "THEORY",
+          "options": ["Option A", "Option B", "Option C", "Option D"],
+          "answer": "A" (for MCQ, identify the letter based on bold/underline/content. for THEORY, leave this as an empty string ""),
+          "marks": 1
+        }
 
-      for (const line of lines) {
-        if (line.match(/^\d+\./)) { // Starts with "1." or "2." etc.
-          if (currentQuestion) questions.push(currentQuestion);
-          currentQuestion = {
-            question: line.replace(/^\d+\.\s*/, ''),
-            type: "MCQ",
-            options: [],
-            answer: "",
-            marks: 1
-          };
-        } else if (line.match(/^[A-D]\)/) || line.match(/^[A-D]\./)) {
-          if (currentQuestion) {
-            currentQuestion.options.push(line.replace(/^[A-D][\.\)]\s*/, ''));
-          }
+        Rules:
+        1. If a question has options, it is "MCQ". Extract all options into the array.
+        2. Identify the correct answer for MCQ. Frequently, the correct option is <strong>bolded</strong> or <u>underlined</u> in the document.
+        3. If there are no options, it is "THEORY". For THEORY questions, the answer field MUST be an empty string "".
+        4. Ignore document headers, school names, dates, or general instructions.
+        5. Combine multi-line questions into a single string.
+
+        HTML Content:
+        ${html}
+      `;
+
+      let text = await generateAiContent(prompt);
+
+      // Clean AI response if it contains markdown markers
+      text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+      const questions = JSON.parse(text);
+      console.log(`AI parsed ${questions.length} questions.`);
+
+      const { subject, class: studentClass, term } = request.query;
+
+
+      const savedQuestions = [];
+
+      for (const q of questions) {
+        try {
+          const saved = await prisma.examQuestion.create({
+            data: {
+              subject: subject || "Imported",
+              class: studentClass || "All",
+              term: term || "First Term",
+              type: q.type || "MCQ",
+              question: q.question,
+              options: q.options || [],
+              answer: q.answer || "",
+              marks: parseFloat(q.marks) || 1.0,
+              teacherId: request.user.id,
+              schoolId: request.user.schoolId
+            }
+          });
+          savedQuestions.push(saved);
+        } catch (dbErr) {
+          console.error("DB Save failed for AI extracted question:", dbErr);
         }
       }
-      if (currentQuestion) questions.push(currentQuestion);
 
-      return { questions };
+      return { success: true, questions: savedQuestions };
     } catch (err) {
-      app.log.error(err);
-      return reply.code(500).send({ error: "Failed to parse document" });
+      console.error("AI Bulk upload error:", err);
+      return reply.code(500).send({ error: "Failed to parse questions using AI. Please try again." });
     }
   });
 
