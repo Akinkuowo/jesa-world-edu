@@ -135,6 +135,7 @@ model StudentResult {
   
   subject   String
   marks     Float
+  testScore Float    @default(0)
   term      String   // e.g. "First Term"
   class     String   // The class student was in
   
@@ -142,6 +143,8 @@ model StudentResult {
   
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  answers   StudentAnswer[]
 
   @@map("student_results")
 }
@@ -196,5 +199,23 @@ model ExamQuestion {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  studentAnswers StudentAnswer[]
+
   @@map("exam_questions")
+}
+
+model StudentAnswer {
+  id         String   @id @default(cuid())
+  resultId   String   @map("result_id")
+  result     StudentResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  questionId String   @map("question_id")
+  question   ExamQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answerText String   @map("answer_text") @db.Text
+  isCorrect  Boolean? @default(false)
+  marks      Float?   @default(0) // For manual theory grading
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("student_answers")
 }

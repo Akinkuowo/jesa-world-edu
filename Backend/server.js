@@ -205,13 +205,16 @@ async function start() {
       return { requires2FA: true, email };
     }
 
-    // Student Login: Use studentId + password
+    // Student Login: Use studentId OR email + password
     if (role === "STUDENT") {
-      if (!studentId) return reply.code(400).send({ error: "Student ID is required" });
+      if (!studentId && !email) return reply.code(400).send({ error: "Student ID or Email is required" });
 
       const user = await prisma.user.findFirst({
         where: {
-          studentId,
+          OR: [
+            { studentId: studentId || undefined },
+            { email: email || undefined }
+          ],
           role: "STUDENT"
         },
         include: { school: true }
@@ -944,6 +947,55 @@ async function start() {
 
   // --- Exam Schedule Routes ---
 
+  // Admin - Question Readiness: which subjects have questions set by teachers
+  app.get("/api/admin/exams/question-readiness", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const schoolId = request.user.schoolId;
+
+    try {
+      // Get all exam questions grouped by subject + class, with teacher info
+      const questions = await prisma.examQuestion.groupBy({
+        by: ['subject', 'class', 'teacherId'],
+        where: { schoolId },
+        _count: { id: true }
+      });
+
+      // Get teacher names
+      const teacherIds = [...new Set(questions.map(q => q.teacherId))];
+      const teachers = await prisma.user.findMany({
+        where: { id: { in: teacherIds } },
+        select: { id: true, firstName: true, lastName: true }
+      });
+      const teacherMap = Object.fromEntries(teachers.map(t => [t.id, `${t.firstName} ${t.lastName}`]));
+
+      // Build summary: group by subject+class
+      const summary = {};
+      questions.forEach(q => {
+        const key = `${q.subject}|${q.class}`;
+        if (!summary[key]) {
+          summary[key] = {
+            subject: q.subject,
+            class: q.class,
+            totalQuestions: 0,
+            teachers: []
+          };
+        }
+        summary[key].totalQuestions += q._count.id;
+        summary[key].teachers.push({
+          name: teacherMap[q.teacherId] || 'Unknown',
+          count: q._count.id
+        });
+      });
+
+      return Object.values(summary);
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch question readiness" });
+    }
+  });
+
   // List Exam Schedules
   app.get("/api/admin/exams", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
@@ -983,6 +1035,13 @@ async function start() {
           schoolId
         }
       });
+
+      // Auto-assign the term ONLY to existing questions for this subject+class that do not already have a term
+      await prisma.examQuestion.updateMany({
+        where: { schoolId, subject, class: studentClass, term: "" },
+        data: { term: type }
+      });
+
       return exam;
     } catch (err) {
       app.log.error(err);
@@ -1016,6 +1075,13 @@ async function start() {
           type
         }
       });
+
+      // Update existing questions for this subject+class that do not already have a term
+      await prisma.examQuestion.updateMany({
+        where: { schoolId, subject, class: studentClass, term: "" },
+        data: { term: type }
+      });
+
       return updatedExam;
     } catch (err) {
       app.log.error(err);
@@ -1472,18 +1538,42 @@ async function start() {
       // Get teacher's subjects
       const teacher = await prisma.user.findUnique({
         where: { id: request.user.id },
-        select: { subjects: true }
+        select: { subjects: true, schoolId: true }
       });
 
-      // Simple list of classes
-      const classes = [
-        "JSS 1", "JSS 2", "JSS 3",
-        "SSS 1", "SSS 2", "SSS 3"
-      ];
+      const schoolId = teacher?.schoolId;
+      const teacherSubjects = teacher?.subjects || [];
+
+      // 1. Fetch unique classes from students in this school
+      const userClasses = await prisma.user.findMany({
+        where: { 
+          schoolId,
+          role: 'STUDENT',
+          studentClass: { not: null }
+        },
+        select: { studentClass: true },
+        distinct: ['studentClass']
+      });
+
+      // 2. Fetch unique classes from actual exam results for teacher's subjects
+      const resultClasses = await prisma.studentResult.findMany({
+        where: {
+          schoolId,
+          subject: { in: teacherSubjects }
+        },
+        select: { class: true },
+        distinct: ['class']
+      });
+
+      // Combine and unique
+      const combinedClasses = Array.from(new Set([
+        ...userClasses.map(c => c.studentClass),
+        ...resultClasses.map(c => c.class)
+      ])).sort();
 
       return {
-        subjects: teacher?.subjects || [],
-        classes: classes
+        subjects: teacherSubjects,
+        classes: combinedClasses
       };
     } catch (err) {
       app.log.error(err);
@@ -1595,6 +1685,187 @@ async function start() {
     }
   });
 
+  // Teacher Awards - Student Rankings by Subject and Class
+  app.get("/api/teacher/awards", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const teacher = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { subjects: true }
+      });
+
+      const subjects = teacher?.subjects || [];
+      if (subjects.length === 0) return [];
+
+      const { subject, class: studentClass, term } = request.query;
+
+      const where = {
+        schoolId: request.user.schoolId,
+        subject: subject ? subject : { in: subjects }
+      };
+      if (studentClass) where.class = studentClass;
+      if (term) where.term = term;
+
+      const results = await prisma.studentResult.findMany({
+        where,
+        include: {
+          student: {
+            select: { firstName: true, lastName: true, studentId: true, studentClass: true }
+          }
+        },
+        orderBy: { marks: 'desc' }
+      });
+
+      return results;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch awards data" });
+    }
+  });
+
+  // Teacher - Get Detailed Student Submission (with answers)
+  app.get("/api/teacher/awards/result/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const { id } = request.params;
+      const result = await prisma.studentResult.findUnique({
+        where: { id },
+        include: {
+          student: {
+            select: { firstName: true, lastName: true, studentId: true, studentClass: true }
+          },
+          answers: {
+            include: {
+              question: true
+            }
+          }
+        }
+      });
+
+      if (!result) return reply.code(404).send({ error: "Result not found" });
+
+      return result;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch submission details" });
+    }
+  });
+
+  // Teacher - Update Theory Grades, Test Score and Recalculate Total Score
+  app.post("/api/teacher/awards/grade", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const { resultId, theoryGrades, testScore } = request.body; // theoryGrades: [ { answerId, marks } ]
+
+      if (!resultId) {
+        return reply.code(400).send({ error: "Invalid payload. Need resultId." });
+      }
+
+      // 1. Update each theory answer's marks (if provided)
+      if (Array.isArray(theoryGrades)) {
+        const updatePromises = theoryGrades.map(g => {
+          return prisma.studentAnswer.update({
+            where: { id: g.answerId },
+            data: { marks: parseFloat(g.marks) || 0 }
+          });
+        });
+        await Promise.all(updatePromises);
+      }
+
+      // 2. Fetch the full result with all answers and questions to recalculate total
+      const result = await prisma.studentResult.findUnique({
+        where: { id: resultId },
+        include: {
+          answers: {
+            include: { question: true }
+          }
+        }
+      });
+
+      if (!result) return reply.code(404).send({ error: "Result not found" });
+
+      // 3. Update testScore if provided
+      const finalTestScore = testScore !== undefined ? parseFloat(testScore) : result.testScore;
+
+      // 4. Recalculate total score
+      let newTotalScore = 0;
+
+      for (const ans of result.answers) {
+        if (ans.question.type === 'MCQ') {
+          // Re-verify MCQ correctness
+          const studentAnswer = ans.answerText || "";
+          const answerLetter = (ans.question.answer || "").toUpperCase().trim();
+          const optionIndex = answerLetter.charCodeAt(0) - 65;
+          const correctOptionText = ans.question.options[optionIndex];
+
+          if (correctOptionText) {
+            if (studentAnswer.trim().toLowerCase() === correctOptionText.trim().toLowerCase()) {
+              newTotalScore += ans.question.marks || 1;
+            }
+          } else {
+            // Fallback
+            if (studentAnswer.trim().toLowerCase() === ans.question.answer.trim().toLowerCase()) {
+              newTotalScore += ans.question.marks || 1;
+            }
+          }
+        } else if (ans.question.type === 'THEORY') {
+          // For theory, use the marks stored (which might have been updated above)
+          const updatedAns = Array.isArray(theoryGrades) 
+            ? theoryGrades.find(tg => tg.answerId === ans.id)
+            : null;
+          newTotalScore += updatedAns ? parseFloat(updatedAns.marks) : (ans.marks || 0);
+        }
+      }
+
+      // Add the test score to the final marks
+      newTotalScore += finalTestScore;
+
+      // 5. Update the StudentResult with the new total score and test score
+      const updatedResult = await prisma.studentResult.update({
+        where: { id: resultId },
+        data: { 
+          marks: newTotalScore,
+          testScore: finalTestScore
+        }
+      });
+
+      return { success: true, newTotalScore: updatedResult.marks };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to update grades" });
+    }
+  });
+
+  // Teacher - Get Exam Schedules (filtered to teacher's subjects)
+  app.get("/api/teacher/exams", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const teacher = await prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { subjects: true }
+      });
+
+      const subjects = teacher?.subjects || [];
+
+      const exams = await prisma.examSchedule.findMany({
+        where: {
+          schoolId: request.user.schoolId,
+          ...(subjects.length > 0 ? { subject: { in: subjects } } : {})
+        },
+        orderBy: { date: 'asc' }
+      });
+
+      return exams;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch exam schedules" });
+    }
+  });
+
   // Exam Questions
   app.get("/api/teacher/exams/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER" && request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
@@ -1631,7 +1902,7 @@ async function start() {
           options,
           answer,
           marks: parseFloat(marks) || 1.0,
-          term: term || "First Term",
+          term: term || "", // Default to empty string (unassigned term)
           teacherId: request.user.id,
           schoolId: request.user.schoolId
         }
@@ -1671,6 +1942,27 @@ async function start() {
     } catch (err) {
       app.log.error(err);
       return reply.code(500).send({ error: "Failed to delete exam question" });
+    }
+  });
+
+  app.post("/api/teacher/exams/questions/bulk-delete", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { ids } = request.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return reply.code(400).send({ error: "No IDs provided" });
+    }
+
+    try {
+      const result = await prisma.examQuestion.deleteMany({
+        where: {
+          id: { in: ids },
+          teacherId: request.user.id
+        }
+      });
+      return { success: true, count: result.count };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to bulk delete exam questions" });
     }
   });
 
@@ -1772,6 +2064,9 @@ async function start() {
           phone: true,
           address: true,
           createdAt: true,
+          createdAt: true,
+          studentClass: true,
+          subjects: true,
           school: {
             select: {
               name: true,
@@ -1788,6 +2083,265 @@ async function start() {
     }
   });
 
+  // Get Student Exams
+  app.get("/api/student/exams", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "STUDENT") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    try {
+      const student = await prisma.user.findUnique({
+        where: { id: request.user.id }
+      });
+
+      if (!student || !student.studentClass) {
+        return [];
+      }
+
+      const enrolledSubjects = student.subjects || [];
+
+      // Map specific classes to their broad scheduling categories
+      const studentClassLower = student.studentClass.toLowerCase();
+      const classCategories = [student.studentClass]; // Always include their exact class
+      
+      if (['ss1', 'ss2', 'ss3'].includes(studentClassLower)) {
+        classCategories.push('Senior Secondary');
+      } else if (['js1', 'js2', 'js3'].includes(studentClassLower)) {
+        classCategories.push('Junior Secondary');
+      }
+
+      // Fetch exams for this student's class (or broad category) and subjects
+      const exams = await prisma.examSchedule.findMany({
+        where: {
+          schoolId: request.user.schoolId,
+          class: { in: classCategories },
+          subject: { in: enrolledSubjects }
+        },
+        orderBy: [
+          { date: 'asc' },
+          { time: 'asc' }
+        ]
+      });
+
+      // Fetch student's existing results to check submission status
+      const results = await prisma.studentResult.findMany({
+        where: { studentId: request.user.id }
+      });
+
+      const examsWithStatus = exams.map(exam => {
+        const hasSubmitted = results.some(r => r.subject === exam.subject && r.term === exam.type);
+        return {
+          ...exam,
+          hasSubmitted
+        };
+      });
+
+      return examsWithStatus;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch student exams" });
+    }
+  });
+
+  // Get Questions for an Exam
+  app.get("/api/student/exams/:id/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "STUDENT") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    try {
+      const student = await prisma.user.findUnique({ where: { id: request.user.id } });
+      const exam = await prisma.examSchedule.findUnique({ where: { id: request.params.id } });
+
+      if (!exam || !student) {
+        return reply.code(404).send({ error: "Exam or student not found" });
+      }
+
+      // Check if already taken to prevent manual URL retakes
+      const existingResult = await prisma.studentResult.findFirst({
+        where: {
+          studentId: student.id,
+          subject: exam.subject,
+          term: exam.type,
+          class: student.studentClass
+        }
+      });
+
+      if (existingResult) {
+        return reply.code(403).send({ error: "You have already completed this exam." });
+      }
+
+      // Generate possible class name variants to match how teachers might have typed it
+      const sClass = (student.studentClass || "").toLowerCase();
+      const possibleClasses = [student.studentClass];
+      
+      if (sClass.match(/^ss\d$/)) {
+        possibleClasses.push(`SSS ${sClass.replace('ss', '')}`);
+        possibleClasses.push(`ss ${sClass.replace('ss', '')}`);
+      } else if (sClass.match(/^js\d$/)) {
+        possibleClasses.push(`JSS ${sClass.replace('js', '')}`);
+        possibleClasses.push(`js ${sClass.replace('js', '')}`);
+      }
+      
+      const rawQuestions = await prisma.examQuestion.findMany({
+        where: {
+          schoolId: request.user.schoolId,
+          subject: exam.subject,
+          class: { in: possibleClasses, mode: 'insensitive' },
+          term: exam.type
+        }
+      });
+
+      // Scrub answers before sending to student!
+      const safeQuestions = rawQuestions.map(q => ({
+        id: q.id,
+        type: q.type,
+        question: q.question,
+        options: q.options,
+        marks: q.marks
+      }));
+
+      // Sort questions: MCQ first, then THEORY. Randomize within each type.
+      const sortedQuestions = safeQuestions.sort((a, b) => {
+        if (a.type === 'MCQ' && b.type !== 'MCQ') return -1;
+        if (a.type !== 'MCQ' && b.type === 'MCQ') return 1;
+        // If they are the same type, randomize
+        return Math.random() - 0.5;
+      });
+
+      return { 
+        exam: {
+          subject: exam.subject,
+          duration: exam.duration,
+          type: exam.type,
+          class: exam.class
+        },
+        questions: sortedQuestions
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch exam questions" });
+    }
+  });
+
+  // Submit Exam
+  app.post("/api/student/exams/:id/submit", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "STUDENT") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+
+    try {
+      const student = await prisma.user.findUnique({ where: { id: request.user.id } });
+      const exam = await prisma.examSchedule.findUnique({ where: { id: request.params.id } });
+      
+      if (!exam || !student) {
+        return reply.code(404).send({ error: "Exam or student not found" });
+      }
+
+      // Check if already taken
+      const existingResult = await prisma.studentResult.findFirst({
+        where: {
+          studentId: student.id,
+          subject: exam.subject,
+          term: exam.type,
+          class: student.studentClass
+        }
+      });
+
+      if (existingResult) {
+        return reply.code(400).send({ error: "Exam already submitted" });
+      }
+
+      const answers = request.body.answers || {}; // Expecting { questionId: "Selected Option / Text" }
+
+      const possibleClasses = [student.studentClass];
+      const sClass = (student.studentClass || "").toLowerCase();
+      if (sClass.match(/^ss\d$/)) {
+        possibleClasses.push(`SSS ${sClass.replace('ss', '')}`);
+        possibleClasses.push(`ss ${sClass.replace('ss', '')}`);
+      } else if (sClass.match(/^js\d$/)) {
+        possibleClasses.push(`JSS ${sClass.replace('js', '')}`);
+        possibleClasses.push(`js ${sClass.replace('js', '')}`);
+      }
+
+      const questions = await prisma.examQuestion.findMany({
+        where: {
+          schoolId: request.user.schoolId,
+          subject: exam.subject,
+          class: { in: possibleClasses, mode: 'insensitive' },
+          term: exam.type
+        }
+      });
+
+      console.log(`[DEBUG_SUBMIT] Found ${questions.length} questions for subject ${exam.subject}`);
+
+      let totalScore = 0;
+      let maxScore = 0;
+
+      for (const q of questions) {
+        maxScore += q.marks || 1;
+        const studentAnswer = answers[q.id];
+        
+        console.log(`[DEBUG_SUBMIT] QID: ${q.id}, Type: ${q.type}, StudentAnswer: "${studentAnswer}"`);
+
+        if (!studentAnswer) continue;
+
+        if (q.type === 'MCQ') {
+          const answerLetter = (q.answer || "").toUpperCase().trim();
+          const optionIndex = answerLetter.charCodeAt(0) - 65;
+          const correctOptionText = q.options[optionIndex];
+          
+          console.log(`[DEBUG_SUBMIT] Correct Letter: ${answerLetter}, Index: ${optionIndex}, CorrectText: "${correctOptionText}"`);
+
+          if (correctOptionText) {
+            if (studentAnswer.trim().toLowerCase() === correctOptionText.trim().toLowerCase()) {
+              console.log(`[DEBUG_SUBMIT] MATCH! +${q.marks || 1}`);
+              totalScore += q.marks || 1;
+            } else {
+              console.log(`[DEBUG_SUBMIT] NO MATCH. Comparison: "${studentAnswer.trim().toLowerCase()}" vs "${correctOptionText.trim().toLowerCase()}"`);
+            }
+          } else {
+            if (studentAnswer.trim().toLowerCase() === q.answer.trim().toLowerCase()) {
+              console.log(`[DEBUG_SUBMIT] MATCH (Fallback)!`);
+              totalScore += q.marks || 1;
+            }
+          }
+        }
+      }
+
+      console.log(`[DEBUG_SUBMIT] Final Score: ${totalScore}/${maxScore}`);
+
+      // Create Result
+      const result = await prisma.studentResult.create({
+        data: {
+          studentId: student.id,
+          subject: exam.subject,
+          marks: totalScore,
+          term: exam.type,
+          class: student.studentClass,
+          schoolId: student.schoolId
+        }
+      });
+
+      // Save each answer
+      const answerPromises = Object.entries(answers).map(([qId, text]) => {
+        return prisma.studentAnswer.create({
+          data: {
+            resultId: result.id,
+            questionId: qId,
+            answerText: text
+          }
+        });
+      });
+      await Promise.all(answerPromises);
+
+      return { success: true, score: totalScore, maxScore, resultId: result.id };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to submit exam" });
+    }
+  });
+
   // Get Student Results
   app.get("/api/student/results", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "STUDENT") {
@@ -1799,6 +2353,7 @@ async function start() {
         where: { studentId: request.user.id },
         orderBy: { createdAt: 'desc' }
       });
+
 
       const grading = await prisma.gradingSystem.findMany({
         where: { schoolId: request.user.schoolId },
