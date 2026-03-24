@@ -17,7 +17,9 @@ import {
     Upload,
     ClipboardCheck,
     Trophy,
-    Search
+    Search,
+    Menu,
+    X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
@@ -33,6 +35,7 @@ export default function AdminDashboard() {
     const [showBulkModal, setShowBulkModal] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [activeView, setActiveView] = useState<'DASHBOARD' | 'TEACHERS' | 'STUDENTS' | 'CURRICULUM' | 'ATTENDANCE' | 'EXAMS' | 'SETTINGS'>('DASHBOARD');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [roleUsers, setRoleUsers] = useState<any[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -354,8 +357,16 @@ export default function AdminDashboard() {
 
     return (
         <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-sans">
+            {/* Mobile Overlay */}
+            {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="fixed left-0 top-0 h-full w-72 bg-white border-r border-slate-200 z-20 flex flex-col shadow-sm">
+            <aside className={`fixed left-0 top-0 h-full w-72 bg-white border-r border-slate-200 z-40 flex flex-col shadow-sm transition-transform duration-300 lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="p-8">
                     <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -367,22 +378,22 @@ export default function AdminDashboard() {
 
                 <nav className="flex-1 px-6 space-y-1">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-4 pt-4">Workspace</div>
-                    <NavItem active={activeView === 'DASHBOARD'} icon={<LayoutDashboard />} label="Dashboard" onClick={() => setActiveView('DASHBOARD')} />
-                    <NavItem active={activeView === 'TEACHERS'} icon={<Users />} label="Teachers" onClick={() => setActiveView('TEACHERS')} />
-                    <NavItem active={activeView === 'STUDENTS'} icon={<GraduationCap />} label="Students" onClick={() => setActiveView('STUDENTS')} />
-                    <NavItem active={activeView === 'CURRICULUM'} icon={<BookOpen />} label="Curriculum" onClick={() => setActiveView('CURRICULUM')} />
-                    <NavItem active={activeView === 'ATTENDANCE'} icon={<ClipboardCheck />} label="Attendance" onClick={() => setActiveView('ATTENDANCE')} />
-                    <NavItem active={activeView === 'EXAMS'} icon={<FileText />} label="Exams" onClick={() => setActiveView('EXAMS')} />
+                    <NavItem active={activeView === 'DASHBOARD'} icon={<LayoutDashboard />} label="Dashboard" onClick={() => { setActiveView('DASHBOARD'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'TEACHERS'} icon={<Users />} label="Teachers" onClick={() => { setActiveView('TEACHERS'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'STUDENTS'} icon={<GraduationCap />} label="Students" onClick={() => { setActiveView('STUDENTS'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'CURRICULUM'} icon={<BookOpen />} label="Curriculum" onClick={() => { setActiveView('CURRICULUM'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'ATTENDANCE'} icon={<ClipboardCheck />} label="Attendance" onClick={() => { setActiveView('ATTENDANCE'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'EXAMS'} icon={<FileText />} label="Exams" onClick={() => { setActiveView('EXAMS'); setIsSidebarOpen(false); }} />
 
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-4 pt-8">Account</div>
-                    <NavItem active={activeView === 'SETTINGS'} icon={<Settings />} label="Settings" onClick={() => setActiveView('SETTINGS')} />
+                    <NavItem active={activeView === 'SETTINGS'} icon={<Settings />} label="Settings" onClick={() => { setActiveView('SETTINGS'); setIsSidebarOpen(false); }} />
                     <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-3 text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all rounded-xl">
                         <LogOut className="w-5 h-5" />
                         <span className="font-semibold text-sm">Sign Out</span>
                     </button>
                 </nav>
 
-                <div className="p-6">
+                <div className="p-6 hidden lg:block">
                     <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-xl shadow-indigo-600/20 relative overflow-hidden group">
                         <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full group-hover:scale-150 transition-transform duration-500" />
                         <h4 className="font-bold relative z-10 mb-1">Need help?</h4>
@@ -393,39 +404,44 @@ export default function AdminDashboard() {
             </aside>
 
             {/* Main Content */}
-            <main className="lg:ml-72 p-10 max-w-[1600px] mx-auto">
-                <header className="flex items-center justify-between mb-12">
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                            {activeView === 'DASHBOARD' ? 'Admin Dashboard' :
-                                activeView === 'TEACHERS' ? 'Teachers Management' :
-                                    activeView === 'STUDENTS' ? 'Students Management' :
-                                        activeView === 'CURRICULUM' ? 'Academic Curriculum' :
-                                            activeView === 'ATTENDANCE' ? 'Student Attendance' :
-                                                activeView === 'EXAMS' ? 'Exams Management' :
-                                                    'School Settings'}
-                        </h1>
-                        <p className="text-slate-500 font-medium">Welcome back, <span className="text-indigo-600">{user.firstName}</span>. System is running smoothly.</p>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                        <button className="flex items-center space-x-2 bg-white border border-slate-200 py-2.5 px-6 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 transition-all text-slate-700">
-                            <span>Quick Report</span>
+            <main className="lg:ml-72 p-6 lg:p-10 max-w-[1600px] mx-auto min-h-screen">
+                <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 lg:mb-12 gap-6">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="lg:hidden p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"
+                        >
+                            {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                         </button>
+                        <div>
+                            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
+                                {activeView === 'DASHBOARD' ? 'Admin Dashboard' :
+                                    activeView === 'TEACHERS' ? 'Teachers Management' :
+                                        activeView === 'STUDENTS' ? 'Students Management' :
+                                            activeView === 'CURRICULUM' ? 'Academic Curriculum' :
+                                                activeView === 'ATTENDANCE' ? 'Student Attendance' :
+                                                    activeView === 'EXAMS' ? 'Exams Management' :
+                                                        'School Settings'}
+                            </h1>
+                            <p className="text-sm lg:text-base text-slate-500 font-medium">Welcome back, <span className="text-indigo-600">{user.firstName}</span>.</p>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
                         {activeView === 'STUDENTS' && (
                             <>
-                                <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-emerald-600 py-2.5 px-6 rounded-xl text-sm font-bold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">
+                                <button onClick={() => setShowBulkModal(true)} className="flex items-center space-x-2 bg-emerald-600 py-2.5 px-4 lg:px-6 rounded-xl text-xs lg:text-sm font-bold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all">
                                     <Upload className="w-4 h-4" />
                                     <span>Bulk Upload</span>
                                 </button>
                                 {selectedStudents.length > 0 && (
-                                    <button onClick={() => setShowBulkPromoteModal(true)} className="flex items-center space-x-2 bg-purple-600 py-2.5 px-6 rounded-xl text-sm font-bold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-700 transition-all">
+                                    <button onClick={() => setShowBulkPromoteModal(true)} className="flex items-center space-x-2 bg-purple-600 py-2.5 px-4 lg:px-6 rounded-xl text-xs lg:text-sm font-bold text-white shadow-lg shadow-purple-600/20 hover:bg-purple-700 transition-all">
                                         <ArrowUpCircle className="w-4 h-4" />
                                         <span>Promote ({selectedStudents.length})</span>
                                     </button>
                                 )}
                             </>
                         )}
-                        <button onClick={() => activeView === 'CURRICULUM' ? setShowAddSubjectModal(true) : setShowAddModal(true)} className="flex items-center space-x-2 bg-indigo-600 py-2.5 px-6 rounded-xl text-sm font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
+                        <button onClick={() => activeView === 'CURRICULUM' ? setShowAddSubjectModal(true) : setShowAddModal(true)} className="flex items-center space-x-2 bg-indigo-600 py-2.5 px-4 lg:px-6 rounded-xl text-xs lg:text-sm font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all">
                             {activeView === 'CURRICULUM' ? <BookOpen className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
                             <span>Add {activeView === 'STUDENTS' ? 'Student' : activeView === 'TEACHERS' ? 'Teacher' : activeView === 'CURRICULUM' ? 'Subject' : 'Employee'}</span>
                         </button>
@@ -633,7 +649,8 @@ export default function AdminDashboard() {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-[2rem] border border-slate-200 overflow-y-auto max-h-[70vh] shadow-sm custom-scrollbar">
+                        <div className="bg-white rounded-[2rem] border border-slate-200 overflow-x-auto shadow-sm custom-scrollbar">
+                            <div className="min-w-[1000px]">
                             {loadingUsers ? (
                                 <div className="p-20 text-center text-slate-400 font-bold">Loading {activeView.toLowerCase()}...</div>
                             ) : (
@@ -778,6 +795,7 @@ export default function AdminDashboard() {
                                     </tbody>
                                 </table>
                             )}
+                            </div>
                         </div>
                     </div>
                 )}

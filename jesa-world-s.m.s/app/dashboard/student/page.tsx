@@ -67,34 +67,34 @@ export default function StudentDashboard() {
     return (
         <div className="min-h-screen bg-[#f1f3f6] text-slate-900 font-sans pb-20">
             {/* Top Banner */}
-            <div className="bg-indigo-700 h-64 w-full relative overflow-hidden">
+            <div className="bg-indigo-700 h-48 lg:h-64 w-full relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-purple-700 opacity-90" />
                 <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
                 <div className="absolute -left-20 -bottom-20 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
 
-                <div className="relative z-10 max-w-7xl mx-auto px-10 h-full flex flex-col justify-center">
-                    <div className="flex items-center space-x-6">
-                        <div className="w-24 h-24 bg-white rounded-3xl p-1 shadow-2xl">
-                            <div className="w-full h-full bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-3xl">
+                <div className="relative z-10 max-w-7xl mx-auto px-6 lg:px-10 h-full flex flex-col justify-center">
+                    <div className="flex items-center space-x-4 lg:space-x-6">
+                        <div className="w-16 h-16 lg:w-24 lg:h-24 bg-white rounded-2xl lg:rounded-3xl p-1 shadow-2xl">
+                            <div className="w-full h-full bg-indigo-50 rounded-xl lg:rounded-2xl flex items-center justify-center text-indigo-600 font-black text-xl lg:text-3xl">
                                 {user.firstName.charAt(0)}
                             </div>
                         </div>
                         <div className="text-white">
-                            <h1 className="text-4xl font-black tracking-tight mb-2">Welcome, {user.firstName}!</h1>
-                            <div className="flex items-center space-x-4 opacity-80 font-medium">
+                            <h1 className="text-2xl lg:text-4xl font-black tracking-tight mb-1 lg:mb-2 truncate max-w-[200px] md:max-w-none">Welcome, {user.firstName}!</h1>
+                            <div className="flex flex-wrap items-center gap-2 lg:gap-4 opacity-80 font-medium text-xs lg:text-base">
                                 <span className="flex items-center gap-1.5"><GraduationCap className="w-4 h-4" /> Grade 11-B</span>
-                                <span className="w-1.5 h-1.5 bg-white/40 rounded-full" />
-                                <span className="flex items-center gap-1.5"><Star className="w-4 h-4" /> Top 5% of Class</span>
+                                <span className="hidden md:block w-1.5 h-1.5 bg-white/40 rounded-full" />
+                                <span className="flex items-center gap-1.5"><Star className="w-4 h-4" /> Top 5%</span>
                             </div>
                         </div>
-                        <button onClick={handleLogout} className="ml-auto p-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl transition-all">
-                            <LogOut className="w-6 h-6" />
+                        <button onClick={handleLogout} className="ml-auto p-3 lg:p-4 bg-white/10 hover:bg-white/20 text-white rounded-xl lg:rounded-2xl transition-all">
+                            <LogOut className="w-5 h-5 lg:w-6 lg:h-6" />
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-10 -mt-20 relative z-20">
+            <div className="max-w-7xl mx-auto px-6 lg:px-10 -mt-10 lg:-mt-20 relative z-20">
                 {activeTab === 'dashboard' ? (
                     <div className="grid lg:grid-cols-4 gap-8">
                         {/* Left Column - Quick Stats */}
@@ -121,9 +121,9 @@ export default function StudentDashboard() {
 
                 {/* Center - Courses & Assignments */}
                 <div className="lg:col-span-2 space-y-8">
-                    <section className="bg-white rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/60 border border-white">
-                        <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-2xl font-black tracking-tight">Today's Exams</h2>
+                    <section className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 shadow-xl shadow-slate-200/60 border border-white">
+                        <div className="flex items-center justify-between mb-6 lg:mb-8">
+                            <h2 className="text-xl lg:text-2xl font-black tracking-tight">Today's Exams</h2>
                             <button onClick={() => setActiveTab('exams')} className="text-indigo-600 text-sm font-bold flex items-center gap-1 hover:underline group">
                                 See All <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                             </button>
@@ -136,16 +136,16 @@ export default function StudentDashboard() {
                             </div>
                         ) : (
                             <div className="py-10 text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                                <CheckCircle className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                                <CheckCircle className="w-10 h-10 lg:w-12 lg:h-12 text-slate-200 mx-auto mb-4" />
                                 <h3 className="text-slate-800 font-bold mb-1">No exams today!</h3>
                                 <p className="text-xs text-slate-400 font-medium">You have a free schedule today.</p>
                             </div>
                         )}
                     </section>
 
-                    <section className="bg-white rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/60 border border-white">
-                        <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-2xl font-black tracking-tight">Upcoming Exams</h2>
+                    <section className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 shadow-xl shadow-slate-200/60 border border-white">
+                        <div className="flex items-center justify-between mb-6 lg:mb-8">
+                            <h2 className="text-xl lg:text-2xl font-black tracking-tight">Upcoming Exams</h2>
                             <CalendarDays className="w-6 h-6 text-slate-300" />
                         </div>
                         <div className="space-y-4">
@@ -279,15 +279,15 @@ function QuickMenu({ icon, label }: { icon: any, label: string }) {
 
 function StudentExamsView({ exams, onBack, onStart }: { exams: any[], onBack: () => void, onStart: (id: string) => void }) {
     return (
-        <div className="bg-white rounded-[2.5rem] p-10 shadow-xl shadow-slate-200/60 border border-white min-h-[60vh]">
-            <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-6">
+        <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 shadow-xl shadow-slate-200/60 border border-white min-h-[60vh]">
+            <div className="flex items-center justify-between mb-8 lg:mb-10 border-b border-slate-100 pb-6">
                 <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-colors text-slate-600">
+                    <button onClick={onBack} className="p-2 lg:p-3 bg-slate-50 hover:bg-slate-100 rounded-xl lg:rounded-2xl transition-colors text-slate-600">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div>
-                        <h2 className="text-3xl font-black tracking-tight text-slate-900">All Scheduled Exams</h2>
-                        <p className="text-slate-500 font-medium text-sm mt-1">View your complete examination schedule</p>
+                        <h2 className="text-xl lg:text-3xl font-black tracking-tight text-slate-900">All Scheduled Exams</h2>
+                        <p className="hidden md:block text-slate-500 font-medium text-sm mt-1">View your complete examination schedule</p>
                     </div>
                 </div>
             </div>

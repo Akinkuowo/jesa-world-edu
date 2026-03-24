@@ -13,7 +13,9 @@ import {
     CheckCircle2,
     AlertCircle,
     FileText,
-    Brain
+    Brain,
+    Menu,
+    X
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import StudentsView from "./components/Students";
@@ -35,6 +37,7 @@ export default function TeacherDashboard() {
         classesTodayCount: 0
     });
     const [loadingStats, setLoadingStats] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const fetchStats = async () => {
         setLoadingStats(true);
@@ -78,44 +81,60 @@ export default function TeacherDashboard() {
 
     return (
         <div className="min-h-screen bg-[#fafafa] text-slate-900">
+            {/* Mobile Overlay */}
+            {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm transition-opacity"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <aside className="fixed left-0 top-0 h-full w-24 bg-white border-r border-slate-200 z-20 flex flex-col items-center py-8 space-y-8 shadow-sm">
+            <aside className={`fixed left-0 top-0 h-full w-24 bg-white border-r border-slate-200 z-40 flex flex-col items-center py-8 space-y-8 shadow-sm transition-transform duration-300 lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
                     <BookOpen className="w-6 h-6" />
                 </div>
                 <nav className="flex-1 flex flex-col space-y-4">
-                    <SideIcon icon={<LayoutDashboard />} active={activeView === 'DASHBOARD'} onClick={() => setActiveView('DASHBOARD')} />
-                    <SideIcon icon={<Users />} active={activeView === 'STUDENTS'} onClick={() => setActiveView('STUDENTS')} />
-                    <SideIcon icon={<Notebook />} active={activeView === 'NOTEBOOK'} onClick={() => setActiveView('NOTEBOOK')} />
-                    <SideIcon icon={<FileText />} active={activeView === 'ASSIGNMENTS'} onClick={() => setActiveView('ASSIGNMENTS')} />
-                    <SideIcon icon={<Brain />} active={activeView === 'EXAMS'} onClick={() => setActiveView('EXAMS')} />
-                    <SideIcon icon={<Award />} active={activeView === 'AWARDS'} onClick={() => setActiveView('AWARDS')} />
-                    <SideIcon icon={<Calendar />} active={activeView === 'CALENDAR'} onClick={() => setActiveView('CALENDAR')} />
+                    <SideIcon icon={<LayoutDashboard />} active={activeView === 'DASHBOARD'} onClick={() => { setActiveView('DASHBOARD'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<Users />} active={activeView === 'STUDENTS'} onClick={() => { setActiveView('STUDENTS'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<Notebook />} active={activeView === 'NOTEBOOK'} onClick={() => { setActiveView('NOTEBOOK'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<FileText />} active={activeView === 'ASSIGNMENTS'} onClick={() => { setActiveView('ASSIGNMENTS'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<Brain />} active={activeView === 'EXAMS'} onClick={() => { setActiveView('EXAMS'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<Award />} active={activeView === 'AWARDS'} onClick={() => { setActiveView('AWARDS'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<Calendar />} active={activeView === 'CALENDAR'} onClick={() => { setActiveView('CALENDAR'); setIsSidebarOpen(false); }} />
                 </nav>
                 <button onClick={handleLogout} className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                     <LogOut className="w-6 h-6" />
                 </button>
             </aside>
 
-            <main className="pl-24">
+            <main className="lg:pl-24 transition-all">
                 {/* Header */}
-                <div className="bg-white border-b border-slate-200 px-10 py-6 flex items-center justify-between sticky top-0 z-10">
-                    <h1 className="text-xl font-bold text-slate-800">
-                        {activeView === 'DASHBOARD' ? `Hi, Prof. ${user.lastName}! 👋` :
-                            activeView === 'STUDENTS' ? 'My Students' :
-                                activeView === 'NOTEBOOK' ? 'Lesson Notebook' :
-                                    activeView === 'ASSIGNMENTS' ? 'Assignments' :
-                                        activeView === 'EXAMS' ? 'Set Exams' :
-                                            activeView === 'AWARDS' ? 'Student Awards' :
-                                                'Class Calendar'}
-                    </h1>
-                    <div className="flex items-center space-x-6">
-                        <div className="flex items-center space-x-2 text-slate-500">
+                <div className="bg-white border-b border-slate-200 px-6 lg:px-10 py-6 flex items-center justify-between sticky top-0 z-10">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                            className="lg:hidden p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"
+                        >
+                            {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                        </button>
+                        <h1 className="text-lg lg:text-xl font-bold text-slate-800 truncate max-w-[200px] md:max-w-none">
+                            {activeView === 'DASHBOARD' ? `Hi, Prof. ${user.lastName}! 👋` :
+                                activeView === 'STUDENTS' ? 'My Students' :
+                                    activeView === 'NOTEBOOK' ? 'Lesson Notebook' :
+                                        activeView === 'ASSIGNMENTS' ? 'Assignments' :
+                                            activeView === 'EXAMS' ? 'Set Exams' :
+                                                activeView === 'AWARDS' ? 'Student Awards' :
+                                                    'Class Calendar'}
+                        </h1>
+                    </div>
+                    <div className="flex items-center space-x-3 lg:space-x-6">
+                        <div className="hidden md:flex items-center space-x-2 text-slate-500">
                             <Calendar className="w-4 h-4" />
                             <span className="text-sm font-medium">Monday, 24th May</span>
                         </div>
-                        <div className="flex items-center space-x-3 pl-6 border-l border-slate-200">
-                            <div className="text-right">
+                        <div className="flex items-center space-x-3 pl-3 lg:pl-6 border-l border-slate-200">
+                            <div className="text-right hidden sm:block">
                                 <div className="text-sm font-bold">{user.firstName} {user.lastName}</div>
                                 <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest leading-none mt-1">Senior Lecturer</div>
                             </div>
@@ -126,7 +145,7 @@ export default function TeacherDashboard() {
                     </div>
                 </div>
 
-                <div className="p-10 max-w-7xl mx-auto">
+                <div className="p-6 lg:p-10 max-w-7xl mx-auto">
                     {activeView === 'DASHBOARD' ? (
                         /* Dashboard Grid */
                         <div className="grid lg:grid-cols-3 gap-8">

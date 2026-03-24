@@ -125,18 +125,18 @@ export default function LoginPage() {
 
                 {/* Right Side: Login Card */}
                 <div className="w-full flex items-center">
-                    <div className="w-full bg-slate-800/50 backdrop-blur-xl rounded-[2.5rem] border border-white/10 p-8 lg:p-12 shadow-2xl overflow-hidden relative">
+                    <div className="w-full bg-slate-800/50 backdrop-blur-xl rounded-3xl lg:rounded-[2.5rem] border border-white/10 p-6 lg:p-12 shadow-2xl overflow-hidden relative">
                         {/* Animated Glow */}
                         <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 blur-[80px] rounded-full" />
                         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-indigo-500/20 blur-[80px] rounded-full" />
 
-                        <div className="mb-10">
-                            <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
-                            <p className="text-slate-400">Select your role and sign in to continue</p>
+                        <div className="mb-8 lg:mb-10 text-center lg:text-left">
+                            <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">Welcome Back</h2>
+                            <p className="text-sm lg:text-base text-slate-400">Select your role and sign in to continue</p>
                         </div>
 
                         {/* Role Switcher */}
-                        <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-900/50 rounded-2xl mb-8 border border-white/5">
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-2 p-1.5 bg-slate-900/50 rounded-2xl mb-8 border border-white/5">
                             {(["STUDENT", "PARENT", "TEACHER", "ADMIN"] as const).map((r) => (
                                 <button
                                     key={r}
@@ -145,7 +145,7 @@ export default function LoginPage() {
                                         setError("");
                                     }}
                                     className={cn(
-                                        "py-2.5 px-4 rounded-xl text-sm font-medium transition-all duration-200",
+                                        "py-2 lg:py-2.5 px-3 lg:px-4 rounded-xl text-xs lg:text-sm font-medium transition-all duration-200",
                                         role === r
                                             ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
                                             : "text-slate-400 hover:text-white hover:bg-white/5"
