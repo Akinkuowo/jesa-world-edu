@@ -95,7 +95,7 @@ export default function StudentAwards() {
         setLoading(true);
         try {
             const token = localStorage.getItem("token");
-            const url = new URL("http://localhost:4000/api/teacher/awards");
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/teacher/awards`);
             if (subject) url.searchParams.set("subject", subject);
             if (studentClass) url.searchParams.set("class", studentClass);
             if (term) url.searchParams.set("term", term);
@@ -118,7 +118,7 @@ export default function StudentAwards() {
         setDetailsLoading(true);
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`http://localhost:4000/api/teacher/awards/result/${resultId}`, {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/awards/result/${resultId}`, {
                 headers: { "Authorization": `Bearer ${token}` }
             });
             if (res.ok) {
@@ -152,7 +152,7 @@ export default function StudentAwards() {
                 marks
             }));
 
-            const res = await fetch("http://localhost:4000/api/teacher/awards/grade", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/awards/grade`, {
                 method: "POST",
                 headers: { 
                     "Content-Type": "application/json",
@@ -181,7 +181,7 @@ export default function StudentAwards() {
         const fetchTeacherData = async () => {
             try {
                 const token = localStorage.getItem("token");
-                const res = await fetch("http://localhost:4000/api/teacher/my-data", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/my-data`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.ok) {

@@ -81,7 +81,7 @@ export default function ExamSetter() {
 
     const fetchQuestions = async () => {
         try {
-            const response = await fetch("http://localhost:4000/api/teacher/exams/questions", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions`, {
                 headers: {
                     "Authorization": `Bearer ${localStorage.getItem("token")}`
                 }
@@ -100,7 +100,7 @@ export default function ExamSetter() {
 
         const fetchTeacherData = async () => {
             try {
-                const response = await fetch("http://localhost:4000/api/teacher/my-data", {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/my-data`, {
                     headers: {
                         "Authorization": `Bearer ${localStorage.getItem("token")}`
                     }
@@ -137,7 +137,7 @@ export default function ExamSetter() {
         setIsAILoading(true);
 
         try {
-            const response = await fetch("http://localhost:4000/api/teacher/ai/chat", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/ai/chat`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -175,7 +175,7 @@ export default function ExamSetter() {
         const formData = new FormData();
         formData.append("file", file);
 
-        const url = new URL("http://localhost:4000/api/teacher/exams/bulk-upload");
+        const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/bulk-upload`);
         if (newQuestion.subject) url.searchParams.append("subject", newQuestion.subject);
         if (newQuestion.class) url.searchParams.append("class", newQuestion.class);
         if (newQuestion.term) url.searchParams.append("term", newQuestion.term);
@@ -206,8 +206,8 @@ export default function ExamSetter() {
     const handleCreate = async () => {
         try {
             const url = newQuestion.id
-                ? `http://localhost:4000/api/teacher/exams/questions/${newQuestion.id}`
-                : "http://localhost:4000/api/teacher/exams/questions";
+                ? `${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions/${newQuestion.id}`
+                : `${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions`;
             const method = newQuestion.id ? "PUT" : "POST";
 
             const response = await fetch(url, {
@@ -245,8 +245,8 @@ export default function ExamSetter() {
         try {
             const isBulk = Array.isArray(deleteConfirm.id);
             const url = isBulk 
-                ? "http://localhost:4000/api/teacher/exams/questions/bulk-delete"
-                : `http://localhost:4000/api/teacher/exams/questions/${deleteConfirm.id}`;
+                ? `${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions/bulk-delete`
+                : `${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions/${deleteConfirm.id}`;
             const method = isBulk ? "POST" : "DELETE";
             const body = isBulk ? JSON.stringify({ ids: deleteConfirm.id }) : undefined;
 

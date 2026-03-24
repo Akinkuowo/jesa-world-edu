@@ -68,7 +68,7 @@ export default function ClassCalendar() {
             setLoading(true);
             try {
                 const token = localStorage.getItem("token");
-                const res = await fetch("http://localhost:4000/api/teacher/exams", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/exams`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.ok) {

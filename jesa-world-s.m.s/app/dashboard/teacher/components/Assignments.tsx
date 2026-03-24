@@ -24,7 +24,7 @@ export default function Assignments() {
 
     const handleCreate = async () => {
         try {
-            const response = await fetch("http://localhost:4000/api/teacher/assignments", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/assignments`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

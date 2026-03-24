@@ -67,7 +67,7 @@ export default function LessonNotebook() {
 
     const fetchNotes = async () => {
         try {
-            const response = await fetch("http://localhost:4000/api/teacher/lesson-notes", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/lesson-notes`, {
                 headers: {
                     "Authorization": `Bearer ${localStorage.getItem("token")}`
                 }
@@ -86,7 +86,7 @@ export default function LessonNotebook() {
 
         const fetchTeacherData = async () => {
             try {
-                const response = await fetch("http://localhost:4000/api/teacher/my-data", {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/my-data`, {
                     headers: {
                         "Authorization": `Bearer ${localStorage.getItem("token")}`
                     }
@@ -123,7 +123,7 @@ export default function LessonNotebook() {
         setIsLoading(true);
 
         try {
-            const response = await fetch("http://localhost:4000/api/teacher/ai/chat", {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/ai/chat`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -155,8 +155,8 @@ export default function LessonNotebook() {
 
         try {
             const url = currentNote.id
-                ? `http://localhost:4000/api/teacher/lesson-notes/${currentNote.id}`
-                : "http://localhost:4000/api/teacher/lesson-notes";
+                ? `${process.env.NEXT_PUBLIC_API_URL}/teacher/lesson-notes/${currentNote.id}`
+                : `${process.env.NEXT_PUBLIC_API_URL}/teacher/lesson-notes`;
             const method = currentNote.id ? "PUT" : "POST";
 
             const response = await fetch(url, {
@@ -196,7 +196,7 @@ export default function LessonNotebook() {
     const handleDeleteNote = async (id: string) => {
         if (!confirm("Are you sure you want to delete this lesson note?")) return;
         try {
-            const response = await fetch(`http://localhost:4000/api/teacher/lesson-notes/${id}`, {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/lesson-notes/${id}`, {
                 method: "DELETE",
                 headers: {
                     "Authorization": `Bearer ${localStorage.getItem("token")}`
