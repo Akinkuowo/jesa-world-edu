@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
+import toast from "react-hot-toast";
 import Attendance from "./components/Attendance";
 import Exams from "./components/Exams";
 import SettingsView from "./components/Settings";
@@ -33,7 +34,6 @@ export default function AdminDashboard() {
     const [stats, setStats] = useState({ teacherCount: 0, studentCount: 0 });
     const [showAddModal, setShowAddModal] = useState(false);
     const [showBulkModal, setShowBulkModal] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [activeView, setActiveView] = useState<'DASHBOARD' | 'TEACHERS' | 'STUDENTS' | 'CURRICULUM' | 'ATTENDANCE' | 'EXAMS' | 'SETTINGS'>('DASHBOARD');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [roleUsers, setRoleUsers] = useState<any[]>([]);
@@ -51,6 +51,7 @@ export default function AdminDashboard() {
     const [newEmployee, setNewEmployee] = useState({
         email: "",
         password: "",
+        studentId: "",
         firstName: "",
         lastName: "",
         role: "TEACHER",
@@ -179,16 +180,15 @@ export default function AdminDashboard() {
             if (res.ok) {
                 setShowEditModal(false);
                 setEditingUser(null);
-                setFeedback({ type: 'success', message: 'User updated successfully!' });
+                toast.success('User updated successfully!');
                 if (activeView === 'TEACHERS') fetchUsers('TEACHER');
                 if (activeView === 'STUDENTS') fetchUsers('STUDENT');
-                setTimeout(() => setFeedback(null), 3000);
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || 'Failed to update user' });
+                toast.error(data.error || 'Failed to update user');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error. Please try again.' });
+            toast.error('Network error. Please try again.');
         }
     };
 
@@ -206,18 +206,17 @@ export default function AdminDashboard() {
             });
             if (res.ok) {
                 setShowAddModal(false);
-                setFeedback({ type: 'success', message: `${newEmployee.role === 'TEACHER' ? 'Teacher' : 'Student'} added successfully!` });
+                toast.success(`${newEmployee.role === 'TEACHER' ? 'Teacher' : 'Student'} added successfully!`);
                 fetchStats();
                 if (activeView === 'TEACHERS' && newEmployee.role === 'TEACHER') fetchUsers('TEACHER');
                 if (activeView === 'STUDENTS' && newEmployee.role === 'STUDENT') fetchUsers('STUDENT');
-                setNewEmployee({ email: "", password: "", firstName: "", lastName: "", role: "TEACHER", phone: "", address: "", studentClass: "", subjects: [] });
-                setTimeout(() => setFeedback(null), 3000);
+                setNewEmployee({ email: "", password: "", studentId: "", firstName: "", lastName: "", role: "TEACHER", phone: "", address: "", studentClass: "", subjects: [] });
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || 'Failed to add employee' });
+                toast.error(data.error || 'Failed to add employee');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error. Please try again.' });
+            toast.error('Network error. Please try again.');
         }
     };
 
@@ -233,6 +232,7 @@ export default function AdminDashboard() {
                     firstName: row.firstName || row['First Name'],
                     lastName: row.lastName || row['Last Name'],
                     email: row.email || row['Email'],
+                    studentId: row.studentId || row['Student ID'],
                     password: row.password || row['Password'] || '123456', // Default password if missing, or require it
                     studentClass: row.studentClass || row['Class'],
                     phone: row.phone || row['Phone'],
@@ -254,22 +254,21 @@ export default function AdminDashboard() {
                     const data = await res.json();
 
                     if (res.ok) {
-                        setFeedback({ type: 'success', message: `Processed: ${data.successCount} success, ${data.failureCount} failed.` });
+                        toast.success(`Processed: ${data.successCount} success, ${data.failureCount} failed.`);
                         setShowBulkModal(false);
                         setBulkFile(null);
                         fetchUsers('STUDENT');
                     } else {
-                        setFeedback({ type: 'error', message: data.error || 'Bulk upload failed' });
+                        toast.error(data.error || 'Bulk upload failed');
                     }
                 } catch (err) {
-                    setFeedback({ type: 'error', message: 'Network error during bulk upload.' });
+                    toast.error('Network error during bulk upload.');
                 } finally {
                     setBulkLoading(false);
-                    setTimeout(() => setFeedback(null), 5000);
                 }
             },
             error: (err) => {
-                setFeedback({ type: 'error', message: `CSV Parsing Error: ${err.message}` });
+                toast.error(`CSV Parsing Error: ${err.message}`);
                 setBulkLoading(false);
             }
         });
@@ -294,26 +293,25 @@ export default function AdminDashboard() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: `${student.firstName} has been graduated successfully!` });
+                toast.success(`${student.firstName} has been graduated successfully!`);
                 fetchUsers('STUDENT');
-                setTimeout(() => setFeedback(null), 3000);
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || 'Failed to graduate student' });
+                toast.error(data.error || 'Failed to graduate student');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error. Please try again.' });
+            toast.error('Network error. Please try again.');
         }
     };
 
     const handleBulkPromote = async () => {
         if (selectedStudents.length === 0) {
-            setFeedback({ type: 'error', message: 'Please select at least one student' });
+            toast.error('Please select at least one student');
             return;
         }
 
         if (!bulkPromoteClass) {
-            setFeedback({ type: 'error', message: 'Please select a class' });
+            toast.error('Please select a class');
             return;
         }
 
@@ -333,18 +331,17 @@ export default function AdminDashboard() {
 
             if (res.ok) {
                 const data = await res.json();
-                setFeedback({ type: 'success', message: data.message });
+                toast.success(data.message);
                 setShowBulkPromoteModal(false);
                 setSelectedStudents([]);
                 setBulkPromoteClass("");
                 fetchUsers('STUDENT');
-                setTimeout(() => setFeedback(null), 3000);
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || 'Failed to promote students' });
+                toast.error(data.error || 'Failed to promote students');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error. Please try again.' });
+            toast.error('Network error. Please try again.');
         }
     };
 
@@ -448,13 +445,6 @@ export default function AdminDashboard() {
                     </div>
                 </header>
 
-                {/* Feedback Toast */}
-                {feedback && (
-                    <div className={`mb-6 p-4 rounded-xl flex items-center space-x-3 ${feedback.type === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-red-100 text-red-700 border border-red-200'
-                        }`}>
-                        <span className="font-medium">{feedback.message}</span>
-                    </div>
-                )}
 
                 {activeView === 'DASHBOARD' ? (
                     <>
@@ -682,6 +672,7 @@ export default function AdminDashboard() {
                                                     />
                                                 </th>
                                             )}
+                                            {activeView === 'STUDENTS' && <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student ID</th>}
                                             <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</th>
                                             <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</th>
                                             <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</th>
@@ -700,7 +691,7 @@ export default function AdminDashboard() {
                                             })
                                             .length === 0 ? (
                                             <tr>
-                                                <td colSpan={7} className="px-8 py-20 text-center text-slate-400 font-bold">No {activeView.toLowerCase()} matching filters.</td>
+                                                <td colSpan={activeView === 'STUDENTS' ? 8 : 7} className="px-8 py-20 text-center text-slate-400 font-bold">No {activeView.toLowerCase()} matching filters.</td>
                                             </tr>
                                         ) : (
                                             roleUsers
@@ -930,6 +921,8 @@ export default function AdminDashboard() {
                                 </div>
                             )}
 
+                            {/* Student ID removed from Add Modal as it is auto-generated by backend */}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-slate-600">First Name</label>
@@ -996,7 +989,7 @@ export default function AdminDashboard() {
 
                                 <div className="bg-slate-50 p-4 rounded-xl">
                                     <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">CSV Format Definition</h4>
-                                    <p className="text-xs text-slate-400">Headers: <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-600">firstName, lastName, email, password, studentClass, phone, address</code></p>
+                                    <p className="text-xs text-slate-400">Headers: <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-600">firstName, lastName, email, studentId, password, studentClass, phone, address</code></p>
                                 </div>
 
                                 <div className="flex justify-end space-x-4 pt-4">
@@ -1135,6 +1128,13 @@ export default function AdminDashboard() {
                                 </div>
                             )}
 
+                            {editingUser.role === 'STUDENT' && (
+                                <div className="space-y-2">
+                                    <label className="text-sm font-bold text-slate-600">Student ID (Read-only)</label>
+                                    <input type="text" readOnly disabled value={editingUser.studentId || ""} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-400 font-bold cursor-not-allowed" />
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-slate-600">First Name</label>
@@ -1153,6 +1153,11 @@ export default function AdminDashboard() {
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-slate-600">Address</label>
                                 <input type="text" value={editingUser.address || ""} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" onChange={e => setEditingUser({ ...editingUser, address: e.target.value })} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-600">New Password (Leave blank to keep current)</label>
+                                <input type="password" placeholder="••••••••" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" onChange={e => setEditingUser({ ...editingUser, password: e.target.value })} />
                             </div>
 
                             <div className="flex justify-end space-x-4 pt-4">
@@ -1188,14 +1193,13 @@ export default function AdminDashboard() {
                                     setAvailableSubjects([...availableSubjects, data]);
                                     setShowAddSubjectModal(false);
                                     setNewSubject({ name: "", section: "JUNIOR", category: "" });
-                                    setFeedback({ type: 'success', message: 'Subject added to curriculum!' });
-                                    setTimeout(() => setFeedback(null), 3000);
+                                    toast.success('Subject added to curriculum!');
                                 } else {
                                     const data = await res.json();
-                                    setFeedback({ type: 'error', message: data.error || 'Failed to add subject' });
+                                    toast.error(data.error || 'Failed to add subject');
                                 }
                             } catch (err) {
-                                setFeedback({ type: 'error', message: 'Network error' });
+                                toast.error('Network error');
                             }
                         }} className="space-y-4">
                             <div className="space-y-2">
@@ -1302,16 +1306,15 @@ export default function AdminDashboard() {
                                             });
 
                                             if (res.ok) {
-                                                setFeedback({ type: 'success', message: 'Student promoted successfully!' });
+                                                toast.success('Student promoted successfully!');
                                                 fetchUsers('STUDENT');
                                                 setShowPromoteModal(false);
-                                                setTimeout(() => setFeedback(null), 3000);
                                             } else {
                                                 const data = await res.json();
-                                                setFeedback({ type: 'error', message: data.error || 'Promotion failed' });
+                                                toast.error(data.error || 'Promotion failed');
                                             }
                                         } catch (err) {
-                                            setFeedback({ type: 'error', message: 'Network error' });
+                                            toast.error('Network error');
                                         }
                                     }}
                                     className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-xl text-white font-bold shadow-lg shadow-emerald-600/20 transition-all"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import {
     Users,
     School,
@@ -38,7 +39,6 @@ export default function SuperAdminDashboard() {
         adminFirstName: "",
         adminLastName: ""
     });
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [activeView, setActiveView] = useState<'OVERVIEW' | 'SCHOOLS' | 'ADMINS' | 'SETTINGS'>('OVERVIEW');
 
@@ -107,15 +107,14 @@ export default function SuperAdminDashboard() {
             });
             if (res.ok) {
                 setShowAddModal(false);
-                setFeedback({ type: 'success', message: 'School created successfully!' });
+                toast.success('School created successfully!');
                 fetchSchools();
-                setTimeout(() => setFeedback(null), 3000);
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || 'Failed to create school' });
+                toast.error(data.error || 'Failed to create school');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error. Please try again.' });
+            toast.error('Network error. Please try again.');
             console.error(err);
         }
     };
@@ -128,14 +127,13 @@ export default function SuperAdminDashboard() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
-                setFeedback({ type: 'success', message: 'School reactivated successfully for 4 months!' });
+                toast.success('School reactivated successfully for 4 months!');
                 fetchSchools();
-                setTimeout(() => setFeedback(null), 3000);
             } else {
-                setFeedback({ type: 'error', message: 'Failed to reactivate school' });
+                toast.error('Failed to reactivate school');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error during reactivation.' });
+            toast.error('Network error during reactivation.');
         }
     };
 
@@ -147,14 +145,13 @@ export default function SuperAdminDashboard() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
-                setFeedback({ type: 'success', message: 'School deleted successfully!' });
+                toast.success('School deleted successfully!');
                 fetchSchools();
-                setTimeout(() => setFeedback(null), 3000);
             } else {
-                setFeedback({ type: 'error', message: 'Failed to delete school' });
+                toast.error('Failed to delete school');
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: 'Network error during deletion.' });
+            toast.error('Network error during deletion.');
         }
         setDeleteConfirm(null);
     };
@@ -254,13 +251,6 @@ export default function SuperAdminDashboard() {
                     </button>
                 </header>
 
-                {/* Feedback Toast */}
-                {feedback && (
-                    <div className={`mb-6 p-4 rounded-xl flex items-center space-x-3 ${feedback.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                        }`}>
-                        <span className="font-medium">{feedback.message}</span>
-                    </div>
-                )}
 
                 {/* Content View */}
                 {activeView === 'OVERVIEW' ? (

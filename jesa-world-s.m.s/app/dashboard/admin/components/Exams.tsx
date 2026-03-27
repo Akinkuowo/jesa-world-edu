@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import {
     BookOpen,
     Calendar,
@@ -61,7 +62,6 @@ function ExamScheduleView() {
     const [showModal, setShowModal] = useState(false);
     const [editingExam, setEditingExam] = useState<any>(null);
     const [availableSubjects, setAvailableSubjects] = useState<any[]>([]);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [readiness, setReadiness] = useState<any[]>([]);
     const [readinessLoading, setReadinessLoading] = useState(true);
     const [viewingQuestions, setViewingQuestions] = useState<{ subject: string; class: string } | null>(null);
@@ -173,20 +173,19 @@ function ExamScheduleView() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: `Exam schedule ${editingExam ? 'updated' : 'created'} successfully!` });
+                toast.success(`Exam schedule ${editingExam ? 'updated' : 'created'} successfully!`);
                 fetchExams();
                 setShowModal(false);
                 setEditingExam(null);
                 setForm({ subject: "", class: "Junior Secondary", date: "", time: "", duration: "", type: "First Term" });
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.details || data.error || "Action failed" });
+                toast.error(data.details || data.error || "Action failed");
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Network error" });
+            toast.error("Network error");
         } finally {
             setLoading(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
@@ -200,14 +199,13 @@ function ExamScheduleView() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
-                setFeedback({ type: 'success', message: "Schedule deleted" });
+                toast.success("Schedule deleted");
                 fetchExams();
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Delete failed" });
+            toast.error("Delete failed");
         } finally {
             setLoading(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
@@ -226,12 +224,6 @@ function ExamScheduleView() {
 
     return (
         <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm relative">
-            {feedback && (
-                <div className={`absolute top-4 right-8 px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg z-50 animate-in slide-in-from-top duration-300 ${feedback.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                    {feedback.message}
-                </div>
-            )}
-
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h2 className="text-xl font-black text-slate-900">Active Exam Schedules</h2>
@@ -598,7 +590,6 @@ function ResultsEntryView() {
     const [students, setStudents] = useState<any[]>([]);
     const [subjects, setSubjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
     const [form, setForm] = useState({
         studentId: "",
@@ -629,7 +620,7 @@ function ResultsEntryView() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.studentId || !form.subject || !form.marks) {
-            setFeedback({ type: 'error', message: "Please fill all required fields" });
+            toast.error("Please fill all required fields");
             return;
         }
 
@@ -646,28 +637,21 @@ function ResultsEntryView() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: "Result recorded successfully!" });
+                toast.success("Result recorded successfully!");
                 setForm({ ...form, marks: "" });
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || "Failed to record result" });
+                toast.error(data.error || "Failed to record result");
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Network error" });
+            toast.error("Network error");
         } finally {
             setLoading(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
     return (
         <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm relative">
-            {feedback && (
-                <div className={`absolute top-4 right-8 px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg z-50 animate-in slide-in-from-top duration-300 ${feedback.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                    {feedback.message}
-                </div>
-            )}
-
             <div className="mb-8">
                 <h2 className="text-xl font-black text-slate-900">Record Student Marks</h2>
                 <p className="text-sm text-slate-500 font-medium">Enter scores for individual students by subject and term.</p>
@@ -769,7 +753,6 @@ function GradingSystemView() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingGrade, setEditingGrade] = useState<any>(null);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
     const [form, setForm] = useState({
         grade: "",
@@ -816,20 +799,19 @@ function GradingSystemView() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: `Grade rule ${editingGrade ? 'updated' : 'added'} successfully!` });
+                toast.success(`Grade rule ${editingGrade ? 'updated' : 'added'} successfully!`);
                 fetchGrades();
                 setShowModal(false);
                 setEditingGrade(null);
                 setForm({ grade: "", minScore: "", maxScore: "", remark: "" });
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || "Action failed" });
+                toast.error(data.error || "Action failed");
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Network error" });
+            toast.error("Network error");
         } finally {
             setLoading(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
@@ -843,14 +825,13 @@ function GradingSystemView() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
-                setFeedback({ type: 'success', message: "Grade rule deleted" });
+                toast.success("Grade rule deleted");
                 fetchGrades();
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Delete failed" });
+            toast.error("Delete failed");
         } finally {
             setLoading(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
@@ -867,12 +848,6 @@ function GradingSystemView() {
 
     return (
         <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm relative">
-            {feedback && (
-                <div className={`absolute top-4 right-8 px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg z-50 animate-in slide-in-from-top duration-300 ${feedback.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                    {feedback.message}
-                </div>
-            )}
-
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h2 className="text-xl font-black text-slate-900">Grading Scale Configuration</h2>

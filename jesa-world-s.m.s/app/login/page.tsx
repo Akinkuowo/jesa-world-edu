@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { School, User, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { School, User, Lock, ArrowRight, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import toast from "react-hot-toast";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -19,12 +20,11 @@ export default function LoginPage() {
     const [schoolNumber, setSchoolNumber] = useState("");
     const [studentId, setStudentId] = useState("");
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setError("");
 
         try {
             // If parent is selected, authenticate as student but track parent mode
@@ -68,7 +68,7 @@ export default function LoginPage() {
             const rolePath = role.toLowerCase();
             router.push(`/dashboard/${rolePath}`);
         } catch (err: any) {
-            setError(err.message);
+            toast.error(err.message);
         } finally {
             setLoading(false);
         }
@@ -142,7 +142,6 @@ export default function LoginPage() {
                                     key={r}
                                     onClick={() => {
                                         setRole(r);
-                                        setError("");
                                     }}
                                     className={cn(
                                         "py-2 lg:py-2.5 px-3 lg:px-4 rounded-xl text-xs lg:text-sm font-medium transition-all duration-200",
@@ -156,13 +155,7 @@ export default function LoginPage() {
                             ))}
                         </div>
 
-                        <form onSubmit={handleLogin} className="space-y-5">
-                            {error && (
-                                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center space-x-3 text-red-400 text-sm animate-in fade-in slide-in-from-top-2">
-                                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                                    <span>{error}</span>
-                                </div>
-                            )}
+<form onSubmit={handleLogin} className="space-y-5">
 
                             {/* Admin: School Number + Email */}
                             {role === "ADMIN" && (
@@ -265,22 +258,31 @@ export default function LoginPage() {
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center ml-1">
                                     <label className="text-sm font-medium text-slate-300">Password</label>
-                                    <button type="button" className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors">
-                                        Forgot Password?
-                                    </button>
+                                    {role === "ADMIN" && (
+                                        <button type="button" className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors">
+                                            Forgot Password?
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-500 transition-colors">
                                         <Lock className="w-5 h-5" />
                                     </div>
                                     <input
-                                        type="password"
+                                        type={showPassword ? "text" : "password"}
                                         required
                                         placeholder="••••••••"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full bg-slate-900/50 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all"
+                                        className="w-full bg-slate-900/50 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 transition-all"
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-500 hover:text-blue-500 transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
                                 </div>
                             </div>
 

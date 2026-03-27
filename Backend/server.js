@@ -178,8 +178,11 @@ async function start() {
       const user = await prisma.user.findFirst({
         where: { email, role: "SUPERADMIN" }
       });
-      if (!user || !(await bcrypt.compare(password, user.password))) {
-        return reply.code(401).send({ error: "Invalid credentials" });
+      if (!user) {
+        return reply.code(404).send({ error: "Incorrect email" });
+      }
+      if (!(await bcrypt.compare(password, user.password))) {
+        return reply.code(401).send({ error: "Incorrect password" });
       }
 
       if (!user.isEmailVerified) {
@@ -219,9 +222,14 @@ async function start() {
         },
         include: { school: true }
       });
-
-      if (!user || !user.isActive || !(await bcrypt.compare(password, user.password))) {
-        return reply.code(401).send({ error: "Invalid credentials or account inactive" });
+      if (!user) {
+        return reply.code(404).send({ error: studentId ? "Student ID can't be found" : "Email can't be found" });
+      }
+      if (!user.isActive) {
+        return reply.code(403).send({ error: "Account inactive. Please contact admin." });
+      }
+      if (!(await bcrypt.compare(password, user.password))) {
+        return reply.code(401).send({ error: "Incorrect password" });
       }
 
       // Check School Validity
@@ -268,8 +276,14 @@ async function start() {
         include: { school: true }
       });
 
-      if (!user || !user.isActive || !(await bcrypt.compare(password, user.password))) {
-        return reply.code(401).send({ error: "Invalid credentials or account inactive" });
+      if (!user) {
+        return reply.code(404).send({ error: "Email can't be found" });
+      }
+      if (!user.isActive) {
+        return reply.code(403).send({ error: "Account inactive. Please contact admin." });
+      }
+      if (!(await bcrypt.compare(password, user.password))) {
+        return reply.code(401).send({ error: "Incorrect password" });
       }
 
       // Check School Validity
@@ -308,17 +322,30 @@ async function start() {
       if (!schoolNumber) return reply.code(400).send({ error: "School number is required" });
       if (!email) return reply.code(400).send({ error: "Email is required" });
 
+      // Check school first
+      const school = await prisma.school.findUnique({
+        where: { schoolNumber }
+      });
+      if (!school) {
+        return reply.code(404).send({ error: "School ID can't be found" });
+      }
+
       const user = await prisma.user.findFirst({
         where: {
           email,
           role: "ADMIN",
-          school: { schoolNumber }
+          schoolId: school.id
         },
         include: { school: true }
       });
-
-      if (!user || !user.isActive || !(await bcrypt.compare(password, user.password))) {
-        return reply.code(401).send({ error: "Invalid credentials or account inactive" });
+      if (!user) {
+        return reply.code(404).send({ error: "Email can't be found" });
+      }
+      if (!user.isActive) {
+        return reply.code(403).send({ error: "Account inactive. Please contact admin." });
+      }
+      if (!(await bcrypt.compare(password, user.password))) {
+        return reply.code(401).send({ error: "Incorrect password" });
       }
 
       // Check School Validity
@@ -456,7 +483,7 @@ async function start() {
     }
 
     const { id } = request.params;
-    const { firstName, lastName, phone, address, studentClass, subjects } = request.body;
+    const { firstName, lastName, phone, address, studentClass, subjects, password } = request.body;
     const schoolId = request.user.role === "SUPERADMIN" ? request.body.schoolId : request.user.schoolId;
 
     try {
@@ -468,16 +495,22 @@ async function start() {
         return reply.code(403).send({ error: "Forbidden: User belongs to another school" });
       }
 
+      const updateData = {
+        firstName,
+        lastName,
+        phone,
+        address,
+        studentClass,
+        subjects
+      };
+
+      if (password && password.trim() !== "") {
+        updateData.password = await bcrypt.hash(password, 10);
+      }
+
       const updatedUser = await prisma.user.update({
         where: { id },
-        data: {
-          firstName,
-          lastName,
-          phone,
-          address,
-          studentClass,
-          subjects
-        }
+        data: updateData
       });
 
       return updatedUser;
@@ -636,24 +669,32 @@ async function start() {
       }
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        role,
-        phone,
-        address,
-        school: { connect: { id: schoolId } },
-        studentId,
-        studentClass,
-        subjects
-      }
-    });
+    try {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          firstName,
+          lastName,
+          role,
+          phone,
+          address,
+          school: { connect: { id: schoolId } },
+          studentId,
+          studentClass,
+          subjects
+        }
+      });
 
-    return user;
+      return user;
+    } catch (err) {
+      if (err.code === 'P2002') {
+        return reply.code(400).send({ error: "Email already exists" });
+      }
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to create user" });
+    }
   });
 
   // Bulk Add Students (CSV Upload)

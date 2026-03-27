@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import {
     School,
     User,
@@ -18,7 +19,6 @@ export default function SettingsView() {
     const [activeTab, setActiveTab] = useState<'SCHOOL' | 'ACCOUNT'>('SCHOOL');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
     const [schoolForm, setSchoolForm] = useState({
         name: "",
@@ -78,15 +78,14 @@ export default function SettingsView() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: "School details updated successfully!" });
+                toast.success("School details updated successfully!");
             } else {
-                setFeedback({ type: 'error', message: "Failed to update school details" });
+                toast.error("Failed to update school details");
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Network error" });
+            toast.error("Network error");
         } finally {
             setSaving(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
@@ -105,22 +104,21 @@ export default function SettingsView() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: "Account profile updated successfully!" });
+                toast.success("Account profile updated successfully!");
             } else {
-                setFeedback({ type: 'error', message: "Failed to update profile" });
+                toast.error("Failed to update profile");
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Network error" });
+            toast.error("Network error");
         } finally {
             setSaving(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
     const handlePasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-            setFeedback({ type: 'error', message: "Passwords do not match" });
+            toast.error("Passwords do not match");
             return;
         }
 
@@ -140,17 +138,16 @@ export default function SettingsView() {
             });
 
             if (res.ok) {
-                setFeedback({ type: 'success', message: "Password updated successfully!" });
+                toast.success("Password updated successfully!");
                 setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
             } else {
                 const data = await res.json();
-                setFeedback({ type: 'error', message: data.error || "Failed to update password" });
+                toast.error(data.error || "Failed to update password");
             }
         } catch (err) {
-            setFeedback({ type: 'error', message: "Network error" });
+            toast.error("Network error");
         } finally {
             setSaving(false);
-            setTimeout(() => setFeedback(null), 3000);
         }
     };
 
@@ -165,11 +162,6 @@ export default function SettingsView() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {feedback && (
-                <div className={`fixed top-8 right-8 px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg z-[60] animate-in slide-in-from-top duration-300 ${feedback.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                    {feedback.message}
-                </div>
-            )}
 
             {/* Navigation Tabs */}
             <div className="flex items-center space-x-1 bg-white p-1.5 rounded-2xl border border-slate-200 w-fit shadow-sm">

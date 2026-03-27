@@ -109,11 +109,11 @@ export default function ExamSetter() {
                     const data = await response.json();
                     setTeacherData(data);
                     // Set defaults if available
-                    if (data.subjects.length > 0 || data.classes.length > 0) {
+                    if (data.subjects.length > 0) {
                         setNewQuestion(prev => ({
                             ...prev,
                             subject: data.subjects[0] || "",
-                            class: data.classes[0] || ""
+                            class: "" // Let them select from the filtered list
                         }));
                     }
                 }
@@ -401,9 +401,24 @@ export default function ExamSetter() {
                                             onChange={(e) => setNewQuestion({ ...newQuestion, class: e.target.value })}
                                         >
                                             <option key="default" value="">Select Class</option>
-                                            {teacherData.classes.map((cls, i) => (
-                                                <option key={i} value={cls}>{cls}</option>
-                                            ))}
+                                            {(() => {
+                                                const isJunior = teacherData.classes.some(c => c.toUpperCase().includes('JS')) || 
+                                                                teacherData.subjects.some(s => s.toUpperCase().includes('JS') || s.toUpperCase().includes('JUNIOR'));
+                                                const isSenior = teacherData.classes.some(c => c.toUpperCase().includes('SS')) || 
+                                                                teacherData.subjects.some(s => s.toUpperCase().includes('SS') || s.toUpperCase().includes('SENIOR'));
+                                                
+                                                const options = [];
+                                                if (isJunior || (!isJunior && !isSenior)) {
+                                                    options.push("JS 1", "JS 2", "JS 3");
+                                                }
+                                                if (isSenior || (!isJunior && !isSenior)) {
+                                                    options.push("SS 1", "SS 2", "SS 3");
+                                                }
+                                                
+                                                return Array.from(new Set(options)).map((cls, i) => (
+                                                    <option key={i} value={cls}>{cls}</option>
+                                                ));
+                                            })()}
                                         </select>
                                     </div>
                                     <div className="space-y-3">
