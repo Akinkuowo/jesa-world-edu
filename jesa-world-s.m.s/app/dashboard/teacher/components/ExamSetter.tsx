@@ -27,7 +27,8 @@ import {
     Cpu,
     User,
     Zap,
-    Scale
+    Scale,
+    Calculator
 } from "lucide-react";
 
 interface Message {
@@ -53,7 +54,8 @@ export default function ExamSetter() {
         question: string,
         options: string[],
         answer: string,
-        marks: number
+        marks: number,
+        calculatorEnabled: boolean
     }>({
         subject: "",
         class: "",
@@ -61,7 +63,8 @@ export default function ExamSetter() {
         question: "",
         options: ["", "", "", ""],
         answer: "",
-        marks: 1
+        marks: 1,
+        calculatorEnabled: false
     });
 
     const [savedQuestions, setSavedQuestions] = useState<any[]>([]);
@@ -224,7 +227,7 @@ export default function ExamSetter() {
 
             if (response.ok) {
                 showToast(newQuestion.id ? "Exam question updated!" : "Exam question added!", "success");
-                setNewQuestion({ subject: "", class: "", term: "First Term", question: "", answer: "", options: ["", "", "", ""], marks: 1 });
+                setNewQuestion({ subject: "", class: "", term: "First Term", question: "", answer: "", options: ["", "", "", ""], marks: 1, calculatorEnabled: false });
                 fetchQuestions();
                 setView('LIST');
             } else {
@@ -301,7 +304,8 @@ export default function ExamSetter() {
             question: q.question,
             options: q.options || ["", "", "", ""],
             answer: q.answer,
-            marks: q.marks || 1
+            marks: q.marks || 1,
+            calculatorEnabled: q.calculatorEnabled || false
         });
         setView('CREATE');
     };
@@ -347,7 +351,7 @@ export default function ExamSetter() {
                     </button>
                     <button
                         onClick={() => {
-                            setNewQuestion({ subject: teacherData.subjects[0] || "", class: teacherData.classes[0] || "", term: "First Term", question: "", answer: "", options: ["", "", "", ""], marks: 1 });
+                            setNewQuestion({ subject: teacherData.subjects[0] || "", class: teacherData.classes[0] || "", term: "First Term", question: "", answer: "", options: ["", "", "", ""], marks: 1, calculatorEnabled: false });
                             setView('CREATE');
                         }}
                         className={`px-6 lg:px-8 py-3 lg:py-4 rounded-xl lg:rounded-[1.5rem] font-bold transition-all shadow-xl flex items-center space-x-2 text-xs lg:text-sm ${view === 'CREATE' ? 'bg-slate-900 text-white shadow-slate-900/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
@@ -379,7 +383,7 @@ export default function ExamSetter() {
                             </div>
 
                             <div className="space-y-8">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <div className="space-y-3">
                                         <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Subject</label>
                                         <select
@@ -429,6 +433,22 @@ export default function ExamSetter() {
                                             value={newQuestion.marks}
                                             onChange={(e) => setNewQuestion({ ...newQuestion, marks: parseInt(e.target.value) })}
                                         />
+                                    </div>
+                                    <div className="space-y-3">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Calculator</label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setNewQuestion({ ...newQuestion, calculatorEnabled: !newQuestion.calculatorEnabled })}
+                                            className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all font-bold ${newQuestion.calculatorEnabled ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-slate-50 text-slate-500 hover:bg-slate-100 border-2 border-transparent'}`}
+                                        >
+                                            <div className="flex items-center space-x-3">
+                                                <Calculator className={`w-4 h-4 ${newQuestion.calculatorEnabled ? 'text-indigo-200' : 'text-slate-400'}`} />
+                                                <span className="text-sm">{newQuestion.calculatorEnabled ? 'Active' : 'Disabled'}</span>
+                                            </div>
+                                            <div className={`w-10 h-5 rounded-full relative transition-all ${newQuestion.calculatorEnabled ? 'bg-white/20' : 'bg-slate-200'}`}>
+                                                <div className={`absolute top-1 w-3 h-3 rounded-full transition-all ${newQuestion.calculatorEnabled ? 'right-1 bg-white' : 'left-1 bg-slate-400'}`} />
+                                            </div>
+                                        </button>
                                     </div>
                                 </div>
 
@@ -719,7 +739,8 @@ export default function ExamSetter() {
                                                 question: "", 
                                                 answer: "", 
                                                 options: ["", "", "", ""], 
-                                                marks: 1 
+                                                marks: 1,
+                                                calculatorEnabled: false
                                             });
                                             setView('CREATE');
                                         }}

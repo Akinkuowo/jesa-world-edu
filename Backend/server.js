@@ -1,3 +1,4 @@
+// Backend Server - Last updated for calculator support (Sync Fix)
 require('dotenv').config();
 const Fastify = require("fastify");
 const { PrismaClient } = require("@prisma/client");
@@ -12,6 +13,17 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = Fastify({ logger: true });
 const prisma = new PrismaClient();
+
+// Runtime check for Prisma Client sync
+try {
+  const dmmf = prisma._baseClient?._dmmf || prisma._dmmf;
+  if (dmmf) {
+    const field = dmmf.datamodel?.models?.find(m => m.name === 'ExamQuestion')?.fields?.find(f => f.name === 'calculatorEnabled');
+    console.log(`[PRISMA CHECK] calculatorEnabled field presence: ${!!field}`);
+  }
+} catch (e) {
+  // Silent fail if DMMF is not accessible
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -1930,7 +1942,7 @@ async function start() {
 
   app.post("/api/teacher/exams/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
-    const { subject, class: studentClass, type, question, options, answer, marks, term } = request.body;
+    const { subject, class: studentClass, type, question, options, answer, marks, term, calculatorEnabled } = request.body;
     console.log("Exam Question Create Request:", { subject, studentClass, type, term });
 
     try {
@@ -1944,6 +1956,7 @@ async function start() {
           answer,
           marks: parseFloat(marks) || 1.0,
           term: term || "", // Default to empty string (unassigned term)
+          calculatorEnabled: !!calculatorEnabled,
           teacherId: request.user.id,
           schoolId: request.user.schoolId
         }
@@ -1959,11 +1972,11 @@ async function start() {
   app.put("/api/teacher/exams/questions/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
     const { id } = request.params;
-    const { subject, class: studentClass, type, question, options, answer, marks, term } = request.body;
+    const { subject, class: studentClass, type, question, options, answer, marks, term, calculatorEnabled } = request.body;
     try {
       const examQuestion = await prisma.examQuestion.update({
         where: { id, teacherId: request.user.id },
-        data: { subject, class: studentClass, type, question, options, answer, marks: parseFloat(marks) || 1.0, term: term || "First Term" }
+        data: { subject, class: studentClass, type, question, options, answer, marks: parseFloat(marks) || 1.0, term: term || "First Term", calculatorEnabled: !!calculatorEnabled }
       });
       return examQuestion;
     } catch (err) {
@@ -2239,7 +2252,8 @@ async function start() {
         type: q.type,
         question: q.question,
         options: q.options,
-        marks: q.marks
+        marks: q.marks,
+        calculatorEnabled: q.calculatorEnabled
       }));
 
       // Sort questions: MCQ first, then THEORY. Randomize within each type.

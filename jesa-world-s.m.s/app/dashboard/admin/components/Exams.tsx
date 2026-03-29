@@ -420,7 +420,7 @@ function ExamScheduleView() {
                                                 <span className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black ${
                                                     questionTab === 'MCQ' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
                                                 }`}>{idx + 1}</span>
-                                                <p className="flex-1 text-sm font-bold text-slate-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: q.question }} />
+                                                <p className="flex-1 text-sm font-bold text-slate-800 leading-relaxed break-words whitespace-normal" dangerouslySetInnerHTML={{ __html: q.question }} />
                                                 <span className="flex-shrink-0">
                                                     {expandedQuestion === q.id
                                                         ? <ChevronUp className="w-4 h-4 text-slate-400" />
@@ -446,7 +446,7 @@ function ExamScheduleView() {
                                                                         <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 ${
                                                                             isCorrect ? 'bg-emerald-400 text-white' : 'bg-slate-100 text-slate-500'
                                                                         }`}>{letter}</span>
-                                                                        <span dangerouslySetInnerHTML={{ __html: opt }} />
+                                                                        <span className="break-words whitespace-normal" dangerouslySetInnerHTML={{ __html: opt }} />
                                                                         {isCorrect && <span className="ml-auto text-[10px] font-black text-emerald-600 uppercase tracking-wider">✓ Correct</span>}
                                                                     </div>
                                                                 );
@@ -456,7 +456,7 @@ function ExamScheduleView() {
                                                     {questionTab === 'THEORY' && (
                                                         <div className="mt-4">
                                                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Model Answer</p>
-                                                            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 font-medium leading-relaxed" dangerouslySetInnerHTML={{ __html: q.answer || '<em>No answer provided</em>' }} />
+                                                            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 font-medium leading-relaxed break-words whitespace-normal" dangerouslySetInnerHTML={{ __html: q.answer || '<em>No answer provided</em>' }} />
                                                         </div>
                                                     )}
                                                 </div>

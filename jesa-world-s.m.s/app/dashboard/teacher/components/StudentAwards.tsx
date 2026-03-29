@@ -637,7 +637,7 @@ export default function StudentAwards() {
                                                                 </div>
                                                                 
                                                                 <div 
-                                                                    className="text-lg font-bold text-slate-800 mb-6 prose prose-slate max-w-none"
+                                                                    className="text-lg font-bold text-slate-800 mb-6 prose prose-slate max-w-none break-words whitespace-normal"
                                                                     dangerouslySetInnerHTML={{ __html: ans.question.question }}
                                                                 />
 
@@ -705,7 +705,7 @@ export default function StudentAwards() {
                                                             </div>
                                                             
                                                             <div 
-                                                                className="text-lg font-bold text-slate-800 mb-6 prose prose-slate max-w-none"
+                                                                className="text-lg font-bold text-slate-800 mb-6 prose prose-slate max-w-none break-words whitespace-normal"
                                                                 dangerouslySetInnerHTML={{ __html: ans.question.question }}
                                                             />
 

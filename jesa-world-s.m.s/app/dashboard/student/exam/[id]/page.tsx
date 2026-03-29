@@ -9,9 +9,17 @@ import {
     AlertCircle, 
     Loader2, 
     ChevronRight, 
-    ChevronLeft 
+    ChevronLeft,
+    Calculator 
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import 'react-quill-new/dist/quill.snow.css';
+
+const ScientificCalculator = dynamic(() => import("./ScientificCalculator"), { ssr: false });
+const ReactQuill = dynamic(() => import('react-quill-new'), {
+    ssr: false,
+    loading: () => <div className="h-64 bg-slate-50 animate-pulse rounded-3xl" />
+}) as any;
 
 export default function StudentExamPage() {
     const params = useParams();
@@ -35,6 +43,7 @@ export default function StudentExamPage() {
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
+    const [showCalculator, setShowCalculator] = useState(false);
 
     useEffect(() => {
         if (params.id) {
@@ -295,6 +304,25 @@ export default function StudentExamPage() {
                 </div>
             </header>
 
+            {q.calculatorEnabled && (
+                <button 
+                    onClick={() => setShowCalculator(!showCalculator)}
+                    className={`fixed bottom-8 right-8 z-[60] hidden md:flex items-center gap-3 px-6 py-4 rounded-[2rem] font-black uppercase tracking-widest text-sm transition-all shadow-2xl ${
+                        showCalculator 
+                        ? 'bg-rose-500 text-white shadow-rose-500/20' 
+                        : 'bg-indigo-600 text-white shadow-indigo-600/30 hover:scale-110 active:scale-95'
+                    }`}
+                >
+                    <Calculator className={`w-5 h-5 ${showCalculator ? 'rotate-90' : ''} transition-transform duration-300`} />
+                    <span>{showCalculator ? 'Close Calculator' : 'Scientific Calculator'}</span>
+                </button>
+            )}
+
+            {/* Scientific Calculator Component */}
+            {showCalculator && q.calculatorEnabled && (
+                <ScientificCalculator onClose={() => setShowCalculator(false)} />
+            )}
+
             {/* Main Content View */}
             <main className="flex-1 max-w-4xl mx-auto w-full p-6 md:p-8 flex flex-col relative z-10 overflow-hidden">
                 <div className="flex-1 bg-white rounded-[2.5rem] p-8 md:p-12 shadow-xl shadow-slate-200/50 border border-white flex flex-col overflow-y-auto scrollbar-hide">
@@ -309,7 +337,7 @@ export default function StudentExamPage() {
                     </div>
 
                     <div 
-                        className="text-2xl font-medium leading-relaxed text-slate-800 mb-10 prose prose-slate max-w-none"
+                        className="text-2xl font-medium leading-relaxed text-slate-800 mb-10 prose prose-slate max-w-none break-words whitespace-normal"
                         dangerouslySetInnerHTML={{ __html: q.question }} 
                     />
 
@@ -337,7 +365,7 @@ export default function StudentExamPage() {
                                                 {letter}
                                             </div>
                                             <span 
-                                                className={`text-lg pt-0.5 ${isSelected ? 'font-bold text-indigo-900' : 'text-slate-700 font-medium'}`}
+                                                className={`text-lg pt-0.5 break-words whitespace-normal ${isSelected ? 'font-bold text-indigo-900' : 'text-slate-700 font-medium'}`}
                                                 dangerouslySetInnerHTML={{ __html: opt }}
                                             />
                                         </button>
@@ -345,17 +373,68 @@ export default function StudentExamPage() {
                                 })}
                             </div>
                         ) : (
-                            <div className="h-full">
-                                <textarea 
+                            <div className="h-full quill-theory-editor">
+                                <ReactQuill 
+                                    theme="snow"
                                     value={answers[q.id] || ""}
-                                    onChange={(e) => handleAnswerSelect(q.id, e.target.value)}
-                                    placeholder="Type your detailed answer here..."
-                                    className="w-full h-64 p-6 bg-slate-50 border-2 border-slate-100 focus:border-indigo-500 rounded-3xl outline-none resize-none font-medium text-slate-800 text-lg transition-colors"
+                                    onChange={(content: string) => handleAnswerSelect(q.id, content)}
+                                    placeholder="Type your detailed answer here. You can use formatting and math symbols (x², H₂O)..."
+                                    className="quill-student-editor"
+                                    modules={{
+                                        toolbar: [
+                                            ['bold', 'italic', 'underline'],
+                                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                                            [{ 'script': 'sub'}, { 'script': 'super' }],
+                                            ['clean']
+                                        ],
+                                    }}
                                 />
+                                <style jsx global>{`
+                                    .quill-theory-editor .ql-container {
+                                        height: 250px;
+                                        font-size: 1.125rem;
+                                        border-bottom-left-radius: 1.5rem;
+                                        border-bottom-right-radius: 1.5rem;
+                                        background: #f8fafc;
+                                        border: 2px solid #f1f5f9;
+                                    }
+                                    .quill-theory-editor .ql-toolbar {
+                                        border-top-left-radius: 1.5rem;
+                                        border-top-right-radius: 1.5rem;
+                                        border: 2px solid #f1f5f9;
+                                        border-bottom: none;
+                                        background: white;
+                                    }
+                                    .quill-theory-editor .ql-container.ql-snow {
+                                        border: 2px solid #f1f5f9;
+                                    }
+                                    .quill-theory-editor .ql-editor.ql-blank::before {
+                                        font-style: normal;
+                                        color: #94a3b8;
+                                        font-weight: 500;
+                                    }
+                                `}</style>
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* Mobile Calculator Toggle */}
+                {q.calculatorEnabled && (
+                    <div className="mt-6 md:hidden">
+                        <button 
+                            onClick={() => setShowCalculator(!showCalculator)}
+                            className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg ${
+                                showCalculator 
+                                ? 'bg-rose-500 text-white shadow-rose-500/10' 
+                                : 'bg-indigo-600 text-white shadow-indigo-600/20 active:scale-95'
+                            }`}
+                        >
+                            <Calculator className={`w-4 h-4 ${showCalculator ? 'rotate-90' : ''} transition-transform duration-300`} />
+                            <span>{showCalculator ? 'Close Calculator' : 'Scientific Calculator'}</span>
+                        </button>
+                    </div>
+                )}
 
                 {/* Footer Navigation */}
                 <div className="mt-8 flex items-center justify-between">

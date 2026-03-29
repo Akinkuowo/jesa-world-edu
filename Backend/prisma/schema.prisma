@@ -194,6 +194,7 @@ model ExamQuestion {
   answer      String   @db.Text
   marks       Float    @default(1.0)
   term        String   // e.g. "First Term"
+  calculatorEnabled Boolean @default(false) @map("calculator_enabled")
   schoolId    String   @map("school_id")
   school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now()) @map("created_at")
