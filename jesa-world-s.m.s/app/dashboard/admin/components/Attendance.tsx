@@ -9,29 +9,51 @@ import {
     XCircle,
     Clock,
     MoreHorizontal,
-    Download
+    Download,
+    Loader2
 } from "lucide-react";
+import { useEffect } from "react";
 
 export default function Attendance() {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedClass, setSelectedClass] = useState("js1");
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Mock data for demonstration
-    const attendanceData = [
-        { id: "S001", name: "John Doe", class: "JS1", status: "PRESENT", time: "07:45 AM" },
-        { id: "S002", name: "Jane Smith", class: "JS1", status: "PRESENT", time: "07:50 AM" },
-        { id: "S003", name: "Mike Johnson", class: "JS1", status: "LATE", time: "08:15 AM" },
-        { id: "S004", name: "Sarah Williams", class: "JS1", status: "ABSENT", time: "-" },
-        { id: "S005", name: "Robert Brown", class: "JS1", status: "PRESENT", time: "07:42 AM" },
-    ];
+    const [attendanceData, setAttendanceData] = useState<any[]>([]);
+    const [stats, setStats] = useState({
+        total: 0,
+        present: 0,
+        absent: 0,
+        late: 0
+    });
+    const [loading, setLoading] = useState(true);
 
-    const stats = {
-        total: 45,
-        present: 38,
-        absent: 4,
-        late: 3
+    const fetchAttendance = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/attendance?date=${selectedDate}&studentClass=${selectedClass}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setAttendanceData(data.attendanceData || []);
+                setStats(data.stats || { total: 0, present: 0, absent: 0, late: 0 });
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
     };
+
+    useState(() => {
+        fetchAttendance();
+    });
+
+    useEffect(() => {
+        fetchAttendance();
+    }, [selectedDate, selectedClass]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -87,19 +109,24 @@ export default function Attendance() {
                     </div>
                 </div>
 
-                <div className="mt-8 overflow-x-auto">
+                <div className="mt-8 overflow-x-auto min-h-[300px] relative">
+                    {loading && (
+                        <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                            <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                        </div>
+                    )}
                     <table className="w-full text-left">
                         <thead>
                             <tr className="border-b border-slate-100">
                                 <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student Name</th>
                                 <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID Number</th>
                                 <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                                <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Arrival Time</th>
+                                <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Marked Time</th>
                                 <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {attendanceData.map((student) => (
+                            {attendanceData.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase())).map((student) => (
                                 <tr key={student.id} className="group hover:bg-slate-50/50 transition-colors">
                                     <td className="py-4">
                                         <div className="flex items-center space-x-3">
@@ -113,7 +140,7 @@ export default function Attendance() {
                                     <td className="py-4">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black ${student.status === 'PRESENT' ? 'bg-emerald-50 text-emerald-600' :
                                                 student.status === 'LATE' ? 'bg-amber-50 text-amber-600' :
-                                                    'bg-red-50 text-red-600'
+                                                    student.status === 'ABSENT' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'
                                             }`}>
                                             {student.status}
                                         </span>
@@ -128,6 +155,11 @@ export default function Attendance() {
                             ))}
                         </tbody>
                     </table>
+                    {!loading && attendanceData.length === 0 && (
+                        <div className="text-center py-10">
+                            <p className="text-sm font-bold text-slate-400">No students found for this class.</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

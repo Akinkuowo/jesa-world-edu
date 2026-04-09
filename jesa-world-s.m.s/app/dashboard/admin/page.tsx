@@ -19,14 +19,18 @@ import {
     Trophy,
     Search,
     Menu,
-    X
+    X,
+    Bell,
+    Calendar
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import toast from "react-hot-toast";
 import Attendance from "./components/Attendance";
 import Exams from "./components/Exams";
+import Notifications from "./components/Notifications";
 import SettingsView from "./components/Settings";
+import AcademicSession from "./components/AcademicSession";
 
 export default function AdminDashboard() {
     const router = useRouter();
@@ -34,7 +38,7 @@ export default function AdminDashboard() {
     const [stats, setStats] = useState({ teacherCount: 0, studentCount: 0 });
     const [showAddModal, setShowAddModal] = useState(false);
     const [showBulkModal, setShowBulkModal] = useState(false);
-    const [activeView, setActiveView] = useState<'DASHBOARD' | 'TEACHERS' | 'STUDENTS' | 'CURRICULUM' | 'ATTENDANCE' | 'EXAMS' | 'SETTINGS'>('DASHBOARD');
+    const [activeView, setActiveView] = useState<'DASHBOARD' | 'TEACHERS' | 'STUDENTS' | 'CURRICULUM' | 'ATTENDANCE' | 'EXAMS' | 'NOTIFICATIONS' | 'SETTINGS' | 'ACADEMIC_SESSION'>('DASHBOARD');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [roleUsers, setRoleUsers] = useState<any[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(false);
@@ -68,6 +72,31 @@ export default function AdminDashboard() {
     const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
     const [showBulkPromoteModal, setShowBulkPromoteModal] = useState(false);
     const [bulkPromoteClass, setBulkPromoteClass] = useState("");
+    const [schoolForm, setSchoolForm] = useState<any>(null);
+
+    const fetchSchool = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/school`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setSchoolForm(await res.json());
+            }
+        } catch (err) {
+            console.error("Failed to fetch school details", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchSchool();
+    }, [activeView]);
+
+    useEffect(() => {
+        const handleSessionUpdate = () => fetchSchool();
+        window.addEventListener('sessionUpdate', handleSessionUpdate);
+        return () => window.removeEventListener('sessionUpdate', handleSessionUpdate);
+    }, []);
 
     useEffect(() => {
         const fetchSubjects = async () => {
@@ -356,7 +385,7 @@ export default function AdminDashboard() {
         <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-sans">
             {/* Mobile Overlay */}
             {isSidebarOpen && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm transition-opacity"
                     onClick={() => setIsSidebarOpen(false)}
                 />
@@ -381,6 +410,8 @@ export default function AdminDashboard() {
                     <NavItem active={activeView === 'CURRICULUM'} icon={<BookOpen />} label="Curriculum" onClick={() => { setActiveView('CURRICULUM'); setIsSidebarOpen(false); }} />
                     <NavItem active={activeView === 'ATTENDANCE'} icon={<ClipboardCheck />} label="Attendance" onClick={() => { setActiveView('ATTENDANCE'); setIsSidebarOpen(false); }} />
                     <NavItem active={activeView === 'EXAMS'} icon={<FileText />} label="Exams" onClick={() => { setActiveView('EXAMS'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'NOTIFICATIONS'} icon={<Bell />} label="Notifications" onClick={() => { setActiveView('NOTIFICATIONS'); setIsSidebarOpen(false); }} />
+                    <NavItem active={activeView === 'ACADEMIC_SESSION'} icon={<Calendar />} label="Academic Session" onClick={() => { setActiveView('ACADEMIC_SESSION'); setIsSidebarOpen(false); }} />
 
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-4 pt-8">Account</div>
                     <NavItem active={activeView === 'SETTINGS'} icon={<Settings />} label="Settings" onClick={() => { setActiveView('SETTINGS'); setIsSidebarOpen(false); }} />
@@ -404,7 +435,7 @@ export default function AdminDashboard() {
             <main className="lg:ml-72 p-6 lg:p-10 max-w-[1600px] mx-auto min-h-screen">
                 <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 lg:mb-12 gap-6">
                     <div className="flex items-center gap-4">
-                        <button 
+                        <button
                             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                             className="lg:hidden p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600"
                         >
@@ -418,9 +449,17 @@ export default function AdminDashboard() {
                                             activeView === 'CURRICULUM' ? 'Academic Curriculum' :
                                                 activeView === 'ATTENDANCE' ? 'Student Attendance' :
                                                     activeView === 'EXAMS' ? 'Exams Management' :
-                                                        'School Settings'}
+                                                        activeView === 'NOTIFICATIONS' ? 'School Notifications' :
+                                                            activeView === 'ACADEMIC_SESSION' ? 'Academic Session' :
+                                                                'School Settings'}
                             </h1>
-                            <p className="text-sm lg:text-base text-slate-500 font-medium">Welcome back, <span className="text-indigo-600">{user.firstName}</span>.</p>
+                            <p className="text-sm lg:text-base text-slate-500 font-medium flex items-center gap-2">
+                                Welcome back, <span className="text-indigo-600 font-bold">{user.firstName}</span>.
+                                <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-wider border border-indigo-100">
+                                    <ClipboardCheck className="w-3 h-3" />
+                                    Active: {schoolForm?.sessionStartYear}/{schoolForm?.sessionEndYear} • {schoolForm?.currentTerm}
+                                </span>
+                            </p>
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -499,6 +538,9 @@ export default function AdminDashboard() {
                                 <div className="space-y-3">
                                     <QuickActionItem icon={<ClipboardCheck className="text-blue-500" />} label="Process Salaries" />
                                     <QuickActionItem icon={<Users className="text-purple-500" />} label="Parent-Teacher Meetings" />
+                                    <div onClick={() => setActiveView('ACADEMIC_SESSION')} className="cursor-pointer">
+                                        <QuickActionItem icon={<Calendar className="text-indigo-500" />} label="Set Academic Session" />
+                                    </div>
                                     <QuickActionItem icon={<ArrowUpRight className="text-emerald-500" />} label="Generate Yearly Report" />
                                 </div>
                                 <div className="mt-8 pt-8 border-t border-slate-100">
@@ -596,8 +638,12 @@ export default function AdminDashboard() {
                     <Attendance />
                 ) : activeView === 'EXAMS' ? (
                     <Exams />
+                ) : activeView === 'NOTIFICATIONS' ? (
+                    <Notifications />
                 ) : activeView === 'SETTINGS' ? (
                     <SettingsView />
+                ) : activeView === 'ACADEMIC_SESSION' ? (
+                    <AcademicSession />
                 ) : (
                     <div className="space-y-6">
                         {/* Filter Bar for Teachers/Students */}
@@ -641,151 +687,151 @@ export default function AdminDashboard() {
 
                         <div className="bg-white rounded-[2rem] border border-slate-200 overflow-x-auto shadow-sm custom-scrollbar">
                             <div className="min-w-[1000px]">
-                            {loadingUsers ? (
-                                <div className="p-20 text-center text-slate-400 font-bold">Loading {activeView.toLowerCase()}...</div>
-                            ) : (
-                                <table className="w-full text-left relative">
-                                    <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10 shadow-sm">
-                                        <tr>
-                                            {activeView === 'STUDENTS' && (
-                                                <th className="px-4 py-5">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedStudents.length === roleUsers.filter(u => {
-                                                            const matchesSearch = (u.firstName + " " + u.lastName + " " + u.email).toLowerCase().includes(studentSearch.toLowerCase());
-                                                            const matchesClass = !classFilter || u.studentClass?.toLowerCase() === classFilter.toLowerCase();
-                                                            return matchesSearch && matchesClass;
-                                                        }).length && roleUsers.length > 0}
-                                                        onChange={(e) => {
-                                                            const filteredUsers = roleUsers.filter(u => {
+                                {loadingUsers ? (
+                                    <div className="p-20 text-center text-slate-400 font-bold">Loading {activeView.toLowerCase()}...</div>
+                                ) : (
+                                    <table className="w-full text-left relative">
+                                        <thead className="bg-slate-50 border-b border-slate-100 sticky top-0 z-10 shadow-sm">
+                                            <tr>
+                                                {activeView === 'STUDENTS' && (
+                                                    <th className="px-4 py-5">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedStudents.length === roleUsers.filter(u => {
                                                                 const matchesSearch = (u.firstName + " " + u.lastName + " " + u.email).toLowerCase().includes(studentSearch.toLowerCase());
                                                                 const matchesClass = !classFilter || u.studentClass?.toLowerCase() === classFilter.toLowerCase();
                                                                 return matchesSearch && matchesClass;
-                                                            });
-                                                            if (e.target.checked) {
-                                                                setSelectedStudents(filteredUsers.map(u => u.id));
-                                                            } else {
-                                                                setSelectedStudents([]);
-                                                            }
-                                                        }}
-                                                        className="rounded text-indigo-600 focus:ring-indigo-500/20"
-                                                    />
-                                                </th>
-                                            )}
-                                            {activeView === 'STUDENTS' && <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student ID</th>}
-                                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</th>
-                                            {activeView === 'STUDENTS' && <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Class</th>}
-                                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Joined</th>
-                                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {roleUsers
-                                            .filter(u => {
-                                                const matchesSearch = (u.firstName + " " + u.lastName + " " + u.email).toLowerCase().includes(studentSearch.toLowerCase());
-                                                const matchesClass = !classFilter || u.studentClass?.toLowerCase() === classFilter.toLowerCase();
-                                                return matchesSearch && matchesClass;
-                                            })
-                                            .length === 0 ? (
-                                            <tr>
-                                                <td colSpan={activeView === 'STUDENTS' ? 8 : 7} className="px-8 py-20 text-center text-slate-400 font-bold">No {activeView.toLowerCase()} matching filters.</td>
+                                                            }).length && roleUsers.length > 0}
+                                                            onChange={(e) => {
+                                                                const filteredUsers = roleUsers.filter(u => {
+                                                                    const matchesSearch = (u.firstName + " " + u.lastName + " " + u.email).toLowerCase().includes(studentSearch.toLowerCase());
+                                                                    const matchesClass = !classFilter || u.studentClass?.toLowerCase() === classFilter.toLowerCase();
+                                                                    return matchesSearch && matchesClass;
+                                                                });
+                                                                if (e.target.checked) {
+                                                                    setSelectedStudents(filteredUsers.map(u => u.id));
+                                                                } else {
+                                                                    setSelectedStudents([]);
+                                                                }
+                                                            }}
+                                                            className="rounded text-indigo-600 focus:ring-indigo-500/20"
+                                                        />
+                                                    </th>
+                                                )}
+                                                {activeView === 'STUDENTS' && <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Student ID</th>}
+                                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Name</th>
+                                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Email</th>
+                                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone</th>
+                                                {activeView === 'STUDENTS' && <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Class</th>}
+                                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Joined</th>
+                                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
                                             </tr>
-                                        ) : (
-                                            roleUsers
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {roleUsers
                                                 .filter(u => {
                                                     const matchesSearch = (u.firstName + " " + u.lastName + " " + u.email).toLowerCase().includes(studentSearch.toLowerCase());
                                                     const matchesClass = !classFilter || u.studentClass?.toLowerCase() === classFilter.toLowerCase();
                                                     return matchesSearch && matchesClass;
                                                 })
-                                                .map(u => (
-                                                    <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                                                        {activeView === 'STUDENTS' && (
-                                                            <td className="px-4 py-5">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedStudents.includes(u.id)}
-                                                                    onChange={(e) => {
-                                                                        if (e.target.checked) {
-                                                                            setSelectedStudents([...selectedStudents, u.id]);
-                                                                        } else {
-                                                                            setSelectedStudents(selectedStudents.filter(id => id !== u.id));
-                                                                        }
-                                                                    }}
-                                                                    className="rounded text-indigo-600 focus:ring-indigo-500/20"
-                                                                />
-                                                            </td>
-                                                        )}
-                                                        <td className="px-8 py-5">
-                                                            <div className="flex items-center space-x-3">
-                                                                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-600">
-                                                                    {u.firstName[0]}{u.lastName[0]}
+                                                .length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={activeView === 'STUDENTS' ? 8 : 7} className="px-8 py-20 text-center text-slate-400 font-bold">No {activeView.toLowerCase()} matching filters.</td>
+                                                </tr>
+                                            ) : (
+                                                roleUsers
+                                                    .filter(u => {
+                                                        const matchesSearch = (u.firstName + " " + u.lastName + " " + u.email).toLowerCase().includes(studentSearch.toLowerCase());
+                                                        const matchesClass = !classFilter || u.studentClass?.toLowerCase() === classFilter.toLowerCase();
+                                                        return matchesSearch && matchesClass;
+                                                    })
+                                                    .map(u => (
+                                                        <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                                                            {activeView === 'STUDENTS' && (
+                                                                <td className="px-4 py-5">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedStudents.includes(u.id)}
+                                                                        onChange={(e) => {
+                                                                            if (e.target.checked) {
+                                                                                setSelectedStudents([...selectedStudents, u.id]);
+                                                                            } else {
+                                                                                setSelectedStudents(selectedStudents.filter(id => id !== u.id));
+                                                                            }
+                                                                        }}
+                                                                        className="rounded text-indigo-600 focus:ring-indigo-500/20"
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            <td className="px-8 py-5">
+                                                                <div className="flex items-center space-x-3">
+                                                                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-600">
+                                                                        {u.firstName[0]}{u.lastName[0]}
+                                                                    </div>
+                                                                    <span className="font-bold text-slate-900">{u.firstName} {u.lastName}</span>
                                                                 </div>
-                                                                <span className="font-bold text-slate-900">{u.firstName} {u.lastName}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-8 py-5 text-sm font-medium text-slate-600">{u.email}</td>
-                                                        <td className="px-8 py-5 text-sm font-medium text-slate-600">{u.phone || '-'}</td>
-                                                        {activeView === 'STUDENTS' && <td className="px-8 py-5">
-                                                            <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black uppercase">
-                                                                {u.studentClass || 'N/A'}
-                                                            </span>
-                                                        </td>}
-                                                        <td className="px-8 py-5">
-                                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${u.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                                                                {u.isActive ? 'ACTIVE' : 'INACTIVE'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-8 py-5 text-sm font-medium text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</td>
-                                                        <td className="px-8 py-5">
-                                                            <div className="flex items-center justify-end space-x-2">
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setEditingUser({ ...u, subjects: u.subjects || [] });
-                                                                        setShowEditModal(true);
-                                                                    }}
-                                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
-                                                                    title="Edit Details"
-                                                                >
-                                                                    <Edit className="w-4 h-4" />
-                                                                </button>
-                                                                {activeView === 'STUDENTS' && (
+                                                            </td>
+                                                            <td className="px-8 py-5 text-sm font-medium text-slate-600">{u.email}</td>
+                                                            <td className="px-8 py-5 text-sm font-medium text-slate-600">{u.phone || '-'}</td>
+                                                            {activeView === 'STUDENTS' && <td className="px-8 py-5">
+                                                                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-black uppercase">
+                                                                    {u.studentClass || 'N/A'}
+                                                                </span>
+                                                            </td>}
+                                                            <td className="px-8 py-5">
+                                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black ${u.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                                                    {u.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-8 py-5 text-sm font-medium text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</td>
+                                                            <td className="px-8 py-5">
+                                                                <div className="flex items-center justify-end space-x-2">
                                                                     <button
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            setPromotingStudent(u);
-                                                                            setNewClassForPromotion(u.studentClass || "js1");
-                                                                            setShowPromoteModal(true);
+                                                                            setEditingUser({ ...u, subjects: u.subjects || [] });
+                                                                            setShowEditModal(true);
                                                                         }}
-                                                                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
-                                                                        title="Promote Student"
+                                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100"
+                                                                        title="Edit Details"
                                                                     >
-                                                                        <ArrowUpCircle className="w-4 h-4" />
+                                                                        <Edit className="w-4 h-4" />
                                                                     </button>
-                                                                )}
-                                                                {activeView === 'STUDENTS' && u.studentClass?.toLowerCase() === 'ss3' && (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleGraduateStudent(u);
-                                                                        }}
-                                                                        className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100"
-                                                                        title="Graduate Student"
-                                                                    >
-                                                                        <Trophy className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            )}
+                                                                    {activeView === 'STUDENTS' && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setPromotingStudent(u);
+                                                                                setNewClassForPromotion(u.studentClass || "js1");
+                                                                                setShowPromoteModal(true);
+                                                                            }}
+                                                                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-transparent hover:border-emerald-100"
+                                                                            title="Promote Student"
+                                                                        >
+                                                                            <ArrowUpCircle className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                    {activeView === 'STUDENTS' && u.studentClass?.toLowerCase() === 'ss3' && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleGraduateStudent(u);
+                                                                            }}
+                                                                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-100"
+                                                                            title="Graduate Student"
+                                                                        >
+                                                                            <Trophy className="w-4 h-4" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                            )}
+                                        </tbody>
+                                    </table>
+                                )}
                             </div>
                         </div>
                     </div>

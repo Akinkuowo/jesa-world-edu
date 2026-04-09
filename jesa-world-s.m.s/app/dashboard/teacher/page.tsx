@@ -15,7 +15,9 @@ import {
     FileText,
     Brain,
     Menu,
-    X
+    X,
+    Bell,
+    CheckCircle2 as AttendanceIcon
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import StudentsView from "./components/Students";
@@ -24,12 +26,13 @@ import Assignments from "./components/Assignments";
 import ExamSetter from "./components/ExamSetter";
 import StudentAwards from "./components/StudentAwards";
 import ClassCalendar from "./components/ClassCalendar";
+import AttendanceView from "./components/Attendance";
 import { Loader2 } from "lucide-react";
 
 export default function TeacherDashboard() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
-    const [activeView, setActiveView] = useState<'DASHBOARD' | 'STUDENTS' | 'NOTEBOOK' | 'ASSIGNMENTS' | 'EXAMS' | 'AWARDS' | 'CALENDAR'>('DASHBOARD');
+    const [activeView, setActiveView] = useState<'DASHBOARD' | 'STUDENTS' | 'NOTEBOOK' | 'ASSIGNMENTS' | 'EXAMS' | 'AWARDS' | 'CALENDAR' | 'ATTENDANCE'>('DASHBOARD');
     const [stats, setStats] = useState({
         studentCount: 0,
         lessonNotesCount: 0,
@@ -38,6 +41,9 @@ export default function TeacherDashboard() {
     });
     const [loadingStats, setLoadingStats] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [examReminder, setExamReminder] = useState<any>(null);
+    const [loadingNotifications, setLoadingNotifications] = useState(true);
 
     const fetchStats = async () => {
         setLoadingStats(true);
@@ -62,6 +68,28 @@ export default function TeacherDashboard() {
         }
     };
 
+    const fetchNotifications = async () => {
+        setLoadingNotifications(true);
+        try {
+            const token = localStorage.getItem("token");
+            const [notifsRes, examRes] = await Promise.all([
+                fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+                fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/notifications/latest-exam`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            ]);
+
+            if (notifsRes.ok) setNotifications(await notifsRes.json());
+            if (examRes.ok) setExamReminder(await examRes.json());
+        } catch (err) {
+            console.error("Failed to fetch notifications:", err);
+        } finally {
+            setLoadingNotifications(false);
+        }
+    };
+
     useEffect(() => {
         const savedUser = localStorage.getItem("user");
         if (!savedUser) {
@@ -69,6 +97,7 @@ export default function TeacherDashboard() {
         } else {
             setUser(JSON.parse(savedUser));
             fetchStats();
+            fetchNotifications();
         }
     }, [router]);
 
@@ -102,6 +131,7 @@ export default function TeacherDashboard() {
                     <SideIcon icon={<Brain />} active={activeView === 'EXAMS'} onClick={() => { setActiveView('EXAMS'); setIsSidebarOpen(false); }} />
                     <SideIcon icon={<Award />} active={activeView === 'AWARDS'} onClick={() => { setActiveView('AWARDS'); setIsSidebarOpen(false); }} />
                     <SideIcon icon={<Calendar />} active={activeView === 'CALENDAR'} onClick={() => { setActiveView('CALENDAR'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<AttendanceIcon />} active={activeView === 'ATTENDANCE'} onClick={() => { setActiveView('ATTENDANCE'); setIsSidebarOpen(false); }} />
                 </nav>
                 <button onClick={handleLogout} className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                     <LogOut className="w-6 h-6" />
@@ -125,7 +155,8 @@ export default function TeacherDashboard() {
                                         activeView === 'ASSIGNMENTS' ? 'Assignments' :
                                             activeView === 'EXAMS' ? 'Set Exams' :
                                                 activeView === 'AWARDS' ? 'Student Awards' :
-                                                    'Class Calendar'}
+                                                    activeView === 'ATTENDANCE' ? 'Mark Attendance' :
+                                                        'Class Calendar'}
                         </h1>
                     </div>
                     <div className="flex items-center space-x-3 lg:space-x-6">
@@ -176,33 +207,39 @@ export default function TeacherDashboard() {
 
                             {/* Right Col: Announcements & Quick Info */}
                             <div className="space-y-8">
-                                <section className="bg-indigo-900 text-white rounded-3xl p-8 shadow-xl shadow-indigo-900/10">
-                                    <h3 className="text-lg font-bold mb-4">Exam Reminder</h3>
-                                    <p className="text-sm text-indigo-100/70 mb-6">Mid-term grading period ends in 3 days. Please ensure all student marks are uploaded.</p>
-                                    <button className="w-full bg-indigo-500 hover:bg-indigo-400 py-3 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 group">
-                                        <span>Open Gradebook</span>
-                                        <CheckCircle2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                    </button>
+                                <section className={`rounded-3xl p-8 shadow-xl shadow-indigo-900/10 transition-all ${examReminder?.id ? 'bg-indigo-900 text-white' : 'bg-slate-100 border border-slate-200 text-slate-400'}`}>
+                                    <h3 className="text-lg font-bold mb-4">{examReminder?.title || "No Exam Reminders"}</h3>
+                                    <p className={`text-sm mb-6 ${examReminder?.id ? 'text-indigo-100/70' : 'text-slate-400'}`}>
+                                        {examReminder?.message || "Check back later for school announcements."}
+                                    </p>
+                                    {examReminder?.id && (
+                                        <button className="w-full bg-indigo-500 hover:bg-indigo-400 py-3 rounded-xl font-bold transition-all flex items-center justify-center space-x-2 group">
+                                            <span>Open Gradebook</span>
+                                            <CheckCircle2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                        </button>
+                                    )}
                                 </section>
 
                                 <section className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm">
                                     <h3 className="text-lg font-bold mb-6">Notifications</h3>
                                     <div className="space-y-6">
-                                        <NotifyItem
-                                            icon={<AlertCircle className="text-amber-500" />}
-                                            msg="3 Students missed Mathematics submission"
-                                            time="2 hrs ago"
-                                        />
-                                        <NotifyItem
-                                            icon={<Users className="text-blue-500" />}
-                                            msg="Parent-Teacher meeting scheduled for Friday"
-                                            time="5 hrs ago"
-                                        />
-                                        <NotifyItem
-                                            icon={<CheckCircle2 className="text-emerald-500" />}
-                                            msg="Physics lab material approved by Admin"
-                                            time="Yesterday"
-                                        />
+                                        {loadingNotifications ? (
+                                            <div className="flex items-center space-x-3 text-slate-400">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span className="text-sm font-bold">Loading...</span>
+                                            </div>
+                                        ) : notifications.length === 0 ? (
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center py-4">No new notifications</p>
+                                        ) : (
+                                            notifications.map(n => (
+                                                <NotifyItem
+                                                    key={n.id}
+                                                    icon={<Bell className={`w-4 h-4 ${n.type === 'URGENT' ? 'text-red-500' : 'text-indigo-500'}`} />}
+                                                    msg={n.title}
+                                                    time={new Date(n.createdAt).toLocaleDateString()}
+                                                />
+                                            ))
+                                        )}
                                     </div>
                                 </section>
                             </div>
@@ -219,6 +256,8 @@ export default function TeacherDashboard() {
                         <StudentAwards />
                     ) : activeView === 'CALENDAR' ? (
                         <ClassCalendar />
+                    ) : activeView === 'ATTENDANCE' ? (
+                        <AttendanceView />
                     ) : (
                         <div className="bg-white rounded-[2rem] border border-slate-200 p-20 text-center shadow-sm">
                             <h2 className="text-2xl font-black text-slate-900 mb-2">Coming Soon</h2>

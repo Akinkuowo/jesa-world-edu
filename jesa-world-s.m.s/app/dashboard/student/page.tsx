@@ -23,6 +23,9 @@ export default function StudentDashboard() {
     const [user, setUser] = useState<any>(null);
     const [exams, setExams] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'dashboard' | 'exams'>('dashboard');
+    const [academicStats, setAcademicStats] = useState<any>(null);
+    const [termComparison, setTermComparison] = useState<any>(null);
+    const [loadingStats, setLoadingStats] = useState(true);
 
     useEffect(() => {
         const savedUser = localStorage.getItem("user");
@@ -31,6 +34,7 @@ export default function StudentDashboard() {
         } else {
             setUser(JSON.parse(savedUser));
             fetchExams();
+            fetchAcademicData();
         }
     }, [router]);
 
@@ -44,6 +48,28 @@ export default function StudentDashboard() {
             if (res.ok) setExams(await res.json());
         } catch (err) {
             console.error("Failed to fetch exams", err);
+        }
+    };
+
+    const fetchAcademicData = async () => {
+        setLoadingStats(true);
+        try {
+            const token = localStorage.getItem("token");
+            const [statsRes, termRes] = await Promise.all([
+                fetch(`${process.env.NEXT_PUBLIC_API_URL}/student/academic-stats`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+                fetch(`${process.env.NEXT_PUBLIC_API_URL}/student/term-comparison`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            ]);
+            
+            if (statsRes.ok) setAcademicStats(await statsRes.json());
+            if (termRes.ok) setTermComparison(await termRes.json());
+        } catch (err) {
+            console.error("Failed to fetch academic data", err);
+        } finally {
+            setLoadingStats(false);
         }
     };
 
@@ -82,9 +108,9 @@ export default function StudentDashboard() {
                         <div className="text-white">
                             <h1 className="text-2xl lg:text-4xl font-black tracking-tight mb-1 lg:mb-2 truncate max-w-[200px] md:max-w-none">Welcome, {user.firstName}!</h1>
                             <div className="flex flex-wrap items-center gap-2 lg:gap-4 opacity-80 font-medium text-xs lg:text-base">
-                                <span className="flex items-center gap-1.5"><GraduationCap className="w-4 h-4" /> Grade 11-B</span>
+                                <span className="flex items-center gap-1.5"><GraduationCap className="w-4 h-4" /> {user.studentClass || "N/A"}</span>
                                 <span className="hidden md:block w-1.5 h-1.5 bg-white/40 rounded-full" />
-                                <span className="flex items-center gap-1.5"><Star className="w-4 h-4" /> Top 5%</span>
+                                <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" /> {academicStats?.currentSession || "N/A"}</span>
                             </div>
                         </div>
                         <button onClick={handleLogout} className="ml-auto p-3 lg:p-4 bg-white/10 hover:bg-white/20 text-white rounded-xl lg:rounded-2xl transition-all">
@@ -102,20 +128,49 @@ export default function StudentDashboard() {
                     <div className="bg-white rounded-[2rem] p-8 shadow-xl shadow-slate-200/60 border border-white">
                         <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Attendance</h3>
                         <div className="flex items-end justify-between">
-                            <div className="text-5xl font-black text-slate-900">94<span className="text-2xl text-indigo-500">%</span></div>
+                            <div className="text-5xl font-black text-slate-900">
+                                {loadingStats ? "..." : academicStats?.attendancePercent || 0}
+                                <span className="text-2xl text-indigo-500">%</span>
+                            </div>
                             <div className="text-emerald-500 text-xs font-bold mb-1 flex items-center gap-1">
-                                <Star className="w-3 h-3 fill-emerald-500" /> Great!
+                                <Star className="w-3 h-3 fill-emerald-500" /> {academicStats?.attendancePercent >= 90 ? 'Great!' : 'Good'}
                             </div>
                         </div>
                         <div className="mt-4 w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-indigo-600 w-[94%]" />
+                            <div className="h-full bg-indigo-600 transition-all duration-1000" style={{ width: `${academicStats?.attendancePercent || 0}%` }} />
                         </div>
                     </div>
 
                     <div className="bg-white rounded-[2rem] p-8 shadow-xl shadow-slate-200/60 border border-white">
                         <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">Your GPA</h3>
-                        <div className="text-5xl font-black text-slate-900">3.82<span className="text-2xl text-slate-300">/4.0</span></div>
-                        <p className="mt-2 text-xs font-bold text-slate-400">0.2 Improvement from last term</p>
+                        <div className="text-5xl font-black text-slate-900">
+                            {loadingStats ? "..." : academicStats?.gpa || "0.00"}
+                            <span className="text-2xl text-slate-300">/4.0</span>
+                        </div>
+                        <p className="mt-2 text-xs font-bold text-slate-400">{academicStats?.currentTerm} Performance</p>
+                    </div>
+
+                    <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl shadow-slate-900/20">
+                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6">Term Comparison</h3>
+                        <div className="flex items-end justify-between h-32 gap-2">
+                            {['1st Term', '2nd Term', '3rd Term'].map(term => {
+                                const score = termComparison ? termComparison[term] : 0;
+                                const maxScore = termComparison ? Math.max(...Object.values(termComparison) as number[], 100) : 100;
+                                const height = (score / maxScore) * 100;
+                                return (
+                                    <div key={term} className="flex-1 flex flex-col items-center group">
+                                        <div className="relative w-full flex flex-col items-center justify-end h-full">
+                                            <div 
+                                                className={`w-full rounded-t-lg transition-all duration-1000 ${term === academicStats?.currentTerm ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                                                style={{ height: `${height || 5}%` }}
+                                            />
+                                            <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap text-[10px] font-black">{score} pts</div>
+                                        </div>
+                                        <span className="text-[8px] font-black uppercase tracking-tighter mt-2 text-slate-500">{term.split(' ')[0]}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 

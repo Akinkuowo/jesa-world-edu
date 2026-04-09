@@ -12,6 +12,7 @@ import {
     Save,
     Loader2,
     Shield,
+    Calendar,
     Image as ImageIcon
 } from "lucide-react";
 
@@ -215,6 +216,7 @@ export default function SettingsView() {
                                     />
                                 </div>
                             </div>
+
 
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div className="space-y-2">

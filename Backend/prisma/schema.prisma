@@ -37,7 +37,14 @@ model School {
   lessonNotes    LessonNote[]
   assignments    Assignment[]
   examQuestions  ExamQuestion[]
+  notifications  Notification[]
+  attendance     Attendance[]
   
+  currentSession String?  @map("current_session") @default("2023/2024")
+  currentTerm    String?  @map("current_term") @default("1st Term")
+  sessionStartYear Int?   @map("session_start_year") @default(2023)
+  sessionEndYear   Int?   @map("session_end_year") @default(2024)
+
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -73,6 +80,9 @@ model User {
   lessonNotes       LessonNote[]    @relation("TeacherNotes")
   assignments       Assignment[]    @relation("TeacherAssignments")
   examQuestions     ExamQuestion[]  @relation("TeacherExams")
+  assignmentSubmissions AssignmentSubmission[] @relation("StudentSubmissions")
+  attendanceRecords Attendance[]    @relation("StudentAttendance")
+  markedAttendance  Attendance[]    @relation("TeacherAttendance")
   
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -102,6 +112,8 @@ model ExamSchedule {
   time      String
   duration  String
   type      String   // e.g. "First Term", "MOCK", "WAEC"
+  session   String?
+  term      String?
   
   schoolId  String   @map("school_id")
   school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -176,6 +188,7 @@ model Assignment {
   subject     String
   schoolId    String   @map("school_id")
   school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  submissions AssignmentSubmission[]
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -194,6 +207,7 @@ model ExamQuestion {
   answer      String   @db.Text
   marks       Float    @default(1.0)
   term        String   // e.g. "First Term"
+  session     String?
   calculatorEnabled Boolean @default(false) @map("calculator_enabled")
   schoolId    String   @map("school_id")
   school      School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -219,4 +233,54 @@ model StudentAnswer {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@map("student_answers")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String   @db.Text
+  type      String   @default("INFO") // INFO, EXAM_REMINDER, URGENT
+  target    Role     @default(TEACHER)
+  
+  schoolId  String   @map("school_id")
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  createdBy String?  @map("created_by") // Optional: tracker for which admin created it
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("notifications")
+}
+
+model AssignmentSubmission {
+  id           String     @id @default(cuid())
+  assignmentId String     @map("assignment_id")
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  studentId    String     @map("student_id")
+  student      User       @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+  content      String     @db.Text
+  submittedAt  DateTime   @default(now()) @map("submitted_at")
+  grade        Float?
+  feedback     String?    @db.Text
+  schoolId     String     @map("school_id")
+
+  @@map("assignment_submissions")
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  studentId String   @map("student_id")
+  student   User     @relation("StudentAttendance", fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId String   @map("teacher_id")
+  teacher   User     @relation("TeacherAttendance", fields: [teacherId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  status    String   // PRESENT, ABSENT, LATE
+  class     String?
+  term      String?
+  session   String?
+  schoolId  String   @map("school_id")
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@map("attendance")
 }

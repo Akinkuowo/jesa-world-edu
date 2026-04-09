@@ -998,6 +998,89 @@ async function start() {
     }
   });
 
+  // --- Notification Routes ---
+
+  // Create Notification (Admin)
+  app.post("/api/notifications", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+
+    const { title, message, type, target } = request.body;
+    const schoolId = request.user.schoolId;
+
+    try {
+      const notification = await prisma.notification.create({
+        data: {
+          title,
+          message,
+          type: type || "INFO",
+          target: target || "TEACHER",
+          schoolId,
+          createdBy: request.user.id
+        }
+      });
+      return notification;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to create notification" });
+    }
+  });
+
+  // Get Notifications (Based on Role)
+  app.get("/api/notifications", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { role, schoolId } = request.user;
+
+    try {
+      const notifications = await prisma.notification.findMany({
+        where: {
+          schoolId,
+          target: role
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      });
+      return notifications;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  // Delete Notification (Admin)
+  app.delete("/api/notifications/:id", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
+
+    const { id } = request.params;
+    try {
+      await prisma.notification.delete({
+        where: { id, schoolId: request.user.schoolId }
+      });
+      return { success: true };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to delete notification" });
+    }
+  });
+
+  // Get Latest Exam Reminder (Teacher Dashboard Special)
+  app.get("/api/teacher/notifications/latest-exam", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+
+    try {
+      const reminder = await prisma.notification.findFirst({
+        where: {
+          schoolId: request.user.schoolId,
+          type: "EXAM_REMINDER",
+          target: "TEACHER"
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      return reminder || { title: "No Exam Reminders", message: "Everything is up to date." };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch exam reminder" });
+    }
+  });
+
   // --- Exam Schedule Routes ---
 
   // Admin - Question Readiness: which subjects have questions set by teachers
@@ -1074,9 +1157,18 @@ async function start() {
       return reply.code(403).send({ error: "Forbidden" });
     }
     const schoolId = request.user.schoolId;
-    const { subject, class: studentClass, date, time, duration, type } = request.body;
+    const { subject, class: studentClass, date, time, duration } = request.body;
 
     try {
+      // Fetch school settings for inheritance
+      const school = await prisma.school.findUnique({
+        where: { id: schoolId }
+      });
+
+      const examSession = school?.currentSession || "2023/2024";
+      const examTerm = school?.currentTerm || "1st Term";
+      const combinedType = `${examSession} - ${examTerm}`;
+
       const exam = await prisma.examSchedule.create({
         data: {
           subject,
@@ -1084,7 +1176,9 @@ async function start() {
           date,
           time,
           duration,
-          type,
+          type: combinedType,
+          session: examSession,
+          term: examTerm,
           schoolId
         }
       });
@@ -1092,7 +1186,7 @@ async function start() {
       // Auto-assign the term ONLY to existing questions for this subject+class that do not already have a term
       await prisma.examQuestion.updateMany({
         where: { schoolId, subject, class: studentClass, term: "" },
-        data: { term: type }
+        data: { term: combinedType }
       });
 
       return exam;
@@ -1107,10 +1201,9 @@ async function start() {
     if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
       return reply.code(403).send({ error: "Forbidden" });
     }
-    const { id } = request.params;
     const schoolId = request.user.schoolId;
-    const { subject, class: studentClass, date, time, duration, type } = request.body;
-
+    const { id } = request.params;
+    const { subject, class: studentClass, date, time, duration } = request.body;
     try {
       const existingExam = await prisma.examSchedule.findUnique({ where: { id } });
       if (!existingExam || existingExam.schoolId !== schoolId) {
@@ -1124,15 +1217,8 @@ async function start() {
           class: studentClass,
           date,
           time,
-          duration,
-          type
+          duration
         }
-      });
-
-      // Update existing questions for this subject+class that do not already have a term
-      await prisma.examQuestion.updateMany({
-        where: { schoolId, subject, class: studentClass, term: "" },
-        data: { term: type }
       });
 
       return updatedExam;
@@ -1331,16 +1417,24 @@ async function start() {
     }
   });
 
-  // Update School Details
   app.put("/api/admin/school", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "ADMIN") return reply.code(403).send({ error: "Forbidden" });
     const schoolId = request.user.schoolId;
-    const { name, address, phone, email } = request.body;
+    const { name, address, phone, email, currentSession, currentTerm, sessionStartYear, sessionEndYear } = request.body;
 
     try {
       const updatedSchool = await prisma.school.update({
         where: { id: schoolId },
-        data: { name, address, phone, email }
+        data: { 
+          name, 
+          address, 
+          phone, 
+          email, 
+          currentSession, 
+          currentTerm,
+          sessionStartYear: sessionStartYear ? parseInt(sessionStartYear) : undefined,
+          sessionEndYear: sessionEndYear ? parseInt(sessionEndYear) : undefined
+        }
       });
       return updatedSchool;
     } catch (err) {
@@ -1362,6 +1456,203 @@ async function start() {
     } catch (err) {
       app.log.error(err);
       return reply.code(500).send({ error: "Failed to fetch profile" });
+    }
+  });
+
+  // --- Attendance Routes ---
+
+  app.post("/api/teacher/attendance", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER" && request.user.role !== "ADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const { date, attendanceData, studentClass } = request.body;
+    const schoolId = request.user.schoolId;
+
+    try {
+      const school = await prisma.school.findUnique({ where: { id: schoolId } });
+      const session = school.currentSession;
+      const term = school.currentTerm;
+
+      // Normalize date to start of day UTC
+      const normalizedDate = new Date(date);
+      normalizedDate.setUTCHours(0, 0, 0, 0);
+
+      // We use a transaction to delete existing records for this day/class and re-insert
+      await prisma.$transaction([
+        prisma.attendance.deleteMany({
+          where: {
+            schoolId,
+            class: studentClass,
+            date: normalizedDate
+          }
+        }),
+        ...attendanceData.map((record) => {
+          return prisma.attendance.create({
+            data: {
+              studentId: record.studentId,
+              teacherId: request.user.id,
+              date: normalizedDate,
+              status: record.status,
+              class: studentClass,
+              schoolId,
+              session,
+              term
+            }
+          });
+        })
+      ]);
+
+      return { message: "Attendance marked successfully" };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to mark attendance" });
+    }
+  });
+
+  app.get("/api/admin/attendance", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "ADMIN" && request.user.role !== "SUPERADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const { date, studentClass } = request.query;
+    const schoolId = request.user.schoolId;
+
+    try {
+      const normalizedDate = new Date(date);
+      normalizedDate.setUTCHours(0, 0, 0, 0);
+
+      const students = await prisma.user.findMany({
+        where: { schoolId, role: "STUDENT", studentClass },
+        select: { id: true, firstName: true, lastName: true, studentId: true }
+      });
+
+      const records = await prisma.attendance.findMany({
+        where: { schoolId, class: studentClass, date: normalizedDate }
+      });
+
+      const attendanceData = students.map(s => {
+        const record = records.find(r => r.studentId === s.id);
+        return {
+          id: s.studentId,
+          dbId: s.id,
+          name: `${s.firstName || ""} ${s.lastName || ""}`.trim(),
+          status: record ? record.status : "NO RECORD",
+          time: record ? new Date(record.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"
+        };
+      });
+
+      const stats = {
+        total: students.length,
+        present: records.filter(r => r.status === 'PRESENT').length,
+        absent: records.filter(r => r.status === 'ABSENT').length,
+        late: records.filter(r => r.status === 'LATE').length
+      };
+
+      return { attendanceData, stats };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch attendance" });
+    }
+  });
+
+  app.get("/api/teacher/attendance", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER" && request.user.role !== "ADMIN") {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+    const { date, studentClass } = request.query;
+    const schoolId = request.user.schoolId;
+
+    try {
+      const normalizedDate = new Date(date);
+      normalizedDate.setUTCHours(0, 0, 0, 0);
+
+      const records = await prisma.attendance.findMany({
+        where: { schoolId, class: studentClass, date: normalizedDate },
+        select: { studentId: true, status: true }
+      });
+
+      return records;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch attendance" });
+    }
+  });
+
+  // --- Student Academic Stats & GPA ---
+
+  app.get("/api/student/academic-stats", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "STUDENT") return reply.code(403).send({ error: "Forbidden" });
+    const studentId = request.user.id;
+    const schoolId = request.user.schoolId;
+
+    try {
+      const school = await prisma.school.findUnique({ where: { id: schoolId } });
+      const currentSession = school.currentSession;
+
+      // Calculate GPA
+      const results = await prisma.studentResult.findMany({
+        where: { studentId, schoolId, term: school.currentTerm } // GPA for current term
+      });
+
+      let gpa = 0;
+      if (results.length > 0) {
+        // Simple GPA calculation: (Sum of marks / count) mapped to 4.0
+        const avg = results.reduce((acc, r) => acc + r.marks, 0) / results.length;
+        gpa = (avg / 100) * 4;
+      }
+
+      // Calculate Attendance %
+      const attendance = await prisma.attendance.findMany({
+        where: { studentId, schoolId, session: currentSession }
+      });
+
+      let attendancePercent = 0;
+      if (attendance.length > 0) {
+        const presentCount = attendance.filter(a => a.status === 'PRESENT' || a.status === 'LATE').length;
+        attendancePercent = (presentCount / attendance.length) * 100;
+      }
+
+      return {
+        gpa: parseFloat(gpa.toFixed(2)),
+        attendancePercent: Math.round(attendancePercent),
+        currentSession,
+        currentTerm: school.currentTerm
+      };
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch academic stats" });
+    }
+  });
+
+  app.get("/api/student/term-comparison", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "STUDENT") return reply.code(403).send({ error: "Forbidden" });
+    const studentId = request.user.id;
+    const schoolId = request.user.schoolId;
+
+    try {
+      const school = await prisma.school.findUnique({ where: { id: schoolId } });
+      const currentSession = school.currentSession;
+
+      const results = await prisma.studentResult.findMany({
+        where: { studentId, schoolId } // We could filter by session if we had a session field in StudentResult
+      });
+
+      // Group by term
+      const termScores = {
+        "1st Term": 0,
+        "2nd Term": 0,
+        "3rd Term": 0
+      };
+
+      results.forEach(r => {
+        if (termScores.hasOwnProperty(r.term)) {
+          termScores[r.term] += r.marks;
+        }
+      });
+
+      return termScores;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch term comparison" });
     }
   });
 
@@ -1738,6 +2029,63 @@ async function start() {
     }
   });
 
+  // Get submissions for an assignment (Teacher)
+  app.get("/api/teacher/assignments/:id/submissions", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
+    const { id } = request.params;
+
+    try {
+      const submissions = await prisma.assignmentSubmission.findMany({
+        where: {
+          assignmentId: id,
+          schoolId: request.user.schoolId
+        },
+        include: {
+          student: {
+            select: {
+              firstName: true,
+              lastName: true,
+              studentId: true
+            }
+          }
+        },
+        orderBy: { submittedAt: 'desc' }
+      });
+      return submissions;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to fetch submissions" });
+    }
+  });
+
+  // Submit an assignment (Student)
+  app.post("/api/student/assignments/:id/submit", { preHandler: [app.authenticate] }, async (request, reply) => {
+    if (request.user.role !== "STUDENT") return reply.code(403).send({ error: "Forbidden" });
+    const { id } = request.params;
+    const { content } = request.body;
+
+    try {
+      // Check if assignment exists
+      const assignment = await prisma.assignment.findUnique({
+        where: { id }
+      });
+      if (!assignment) return reply.code(404).send({ error: "Assignment not found" });
+
+      const submission = await prisma.assignmentSubmission.create({
+        data: {
+          assignmentId: id,
+          studentId: request.user.id,
+          content,
+          schoolId: request.user.schoolId
+        }
+      });
+      return submission;
+    } catch (err) {
+      app.log.error(err);
+      return reply.code(500).send({ error: "Failed to submit assignment" });
+    }
+  });
+
   // Teacher Awards - Student Rankings by Subject and Class
   app.get("/api/teacher/awards", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
@@ -1942,10 +2290,18 @@ async function start() {
 
   app.post("/api/teacher/exams/questions", { preHandler: [app.authenticate] }, async (request, reply) => {
     if (request.user.role !== "TEACHER") return reply.code(403).send({ error: "Forbidden" });
-    const { subject, class: studentClass, type, question, options, answer, marks, term, calculatorEnabled } = request.body;
-    console.log("Exam Question Create Request:", { subject, studentClass, type, term });
+    const { subject, class: studentClass, type, question, options, answer, marks, term: bodyTerm, calculatorEnabled } = request.body;
+    console.log("Exam Question Create Request:", { subject, studentClass, type, bodyTerm });
 
     try {
+      // Fetch school's active session/term
+      const school = await prisma.school.findUnique({
+        where: { id: request.user.schoolId }
+      });
+
+      const examTerm = bodyTerm || school?.currentTerm || "1st Term";
+      const examSession = school?.currentSession || "2023/2024";
+
       const examQuestion = await prisma.examQuestion.create({
         data: {
           subject,
@@ -1955,7 +2311,8 @@ async function start() {
           options,
           answer,
           marks: parseFloat(marks) || 1.0,
-          term: term || "", // Default to empty string (unassigned term)
+          term: examTerm,
+          session: examSession,
           calculatorEnabled: !!calculatorEnabled,
           teacherId: request.user.id,
           schoolId: request.user.schoolId
@@ -2064,8 +2421,15 @@ async function start() {
       const questions = JSON.parse(text);
       console.log(`AI parsed ${questions.length} questions.`);
 
-      const { subject, class: studentClass, term } = request.query;
+      const { subject, class: studentClass, term: bodyTerm } = request.query;
 
+      // Fetch school's active session/term for inheritance
+      const school = await prisma.school.findUnique({
+        where: { id: request.user.schoolId }
+      });
+
+      const examTerm = bodyTerm || school?.currentTerm || "1st Term";
+      const examSession = school?.currentSession || "2023/2024";
 
       const savedQuestions = [];
 
@@ -2075,7 +2439,8 @@ async function start() {
             data: {
               subject: subject || "Imported",
               class: studentClass || "All",
-              term: term || "First Term",
+              term: examTerm,
+              session: examSession,
               type: q.type || "MCQ",
               question: q.question,
               options: q.options || [],
@@ -2319,12 +2684,18 @@ async function start() {
         possibleClasses.push(`js ${sClass.replace('js', '')}`);
       }
 
+      // Fetch school settings for session filtering
+      const school = await prisma.school.findUnique({
+        where: { id: request.user.schoolId }
+      });
+
       const questions = await prisma.examQuestion.findMany({
         where: {
           schoolId: request.user.schoolId,
           subject: exam.subject,
           class: { in: possibleClasses, mode: 'insensitive' },
-          term: exam.type
+          term: exam.type,
+          session: school?.currentSession || undefined // Filter by active session
         }
       });
 

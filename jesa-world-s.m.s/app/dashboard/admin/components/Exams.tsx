@@ -69,14 +69,12 @@ function ExamScheduleView() {
     const [questionsLoading, setQuestionsLoading] = useState(false);
     const [questionTab, setQuestionTab] = useState<'MCQ' | 'THEORY'>('MCQ');
     const [expandedQuestion, setExpandedQuestion] = useState<string | null>(null);
-
     const [form, setForm] = useState({
         subject: "",
         class: "Junior Secondary",
         date: "",
         time: "",
-        duration: "",
-        type: "First Term"
+        duration: ""
     });
 
     const fetchExams = async () => {
@@ -177,7 +175,7 @@ function ExamScheduleView() {
                 fetchExams();
                 setShowModal(false);
                 setEditingExam(null);
-                setForm({ subject: "", class: "Junior Secondary", date: "", time: "", duration: "", type: "First Term" });
+                setForm({ subject: "", class: "Junior Secondary", date: "", time: "", duration: "" });
             } else {
                 const data = await res.json();
                 toast.error(data.details || data.error || "Action failed");
@@ -216,8 +214,7 @@ function ExamScheduleView() {
             class: exam.class,
             date: exam.date,
             time: exam.time,
-            duration: exam.duration,
-            type: exam.type
+            duration: exam.duration
         });
         setShowModal(true);
     };
@@ -232,7 +229,7 @@ function ExamScheduleView() {
                 <button
                     onClick={() => {
                         setEditingExam(null);
-                        setForm({ subject: "", class: "Junior Secondary", date: "", time: "", duration: "", type: "First Term" });
+                        setForm({ subject: "", class: "Junior Secondary", date: "", time: "", duration: "" });
                         setShowModal(true);
                     }}
                     className="flex items-center space-x-2 bg-indigo-600 text-white py-2.5 px-6 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
@@ -523,20 +520,6 @@ function ExamScheduleView() {
                                         <option value="Senior Secondary">Senior Secondary</option>
                                     </select>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Exam Type</label>
-                                    <select
-                                        value={form.type}
-                                        onChange={e => setForm({ ...form, type: e.target.value })}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                    >
-                                        <option value="First Term">First Term</option>
-                                        <option value="Second Term">Second Term</option>
-                                        <option value="Third Term">Third Term</option>
-                                        <option value="MOCK">MOCK</option>
-                                        <option value="WAEC">WAEC</option>
-                                        <option value="NECO">NECO</option>
-                                    </select>
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
