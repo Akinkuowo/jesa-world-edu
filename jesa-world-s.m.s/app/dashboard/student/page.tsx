@@ -14,7 +14,8 @@ import {
     Star,
     CheckCircle,
     CalendarDays,
-    ArrowLeft
+    ArrowLeft,
+    ClipboardList
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -218,17 +219,17 @@ export default function StudentDashboard() {
                 {/* Right Column - Side Features */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="grid grid-cols-2 gap-4">
-                        <QuickMenu icon={<MessageSquare />} label="Chat" />
-                        <QuickMenu icon={<FileText />} label="Reports" />
-                        <QuickMenu icon={<Calendar />} label="Events" />
-                        <QuickMenu icon={<Trophy />} label="Awards" />
+                        <QuickMenu icon={<MessageSquare />} label="Chat" onClick={() => router.push('/dashboard/student/chat')} />
+                        <QuickMenu icon={<FileText />} label="Reports" onClick={() => router.push('/dashboard/student/reports')} />
+                        <QuickMenu icon={<ClipboardList />} label="Assignments" onClick={() => router.push('/dashboard/student/assignments')} />
+                        <QuickMenu icon={<Trophy />} label="Awards" onClick={() => router.push('/dashboard/student/awards')} />
                     </div>
 
                     <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl overflow-hidden relative group">
                         <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
                         <h4 className="text-xl font-black mb-4 relative z-10">Library Access</h4>
-                        <p className="text-xs text-slate-400 mb-6 relative z-10 leading-relaxed">You have 2 items overdue and 1 item currently borrowed from the digital library.</p>
-                        <button className="w-full bg-white text-slate-900 py-3 rounded-2xl font-bold text-sm relative z-10 hover:bg-slate-100 transition-colors">Manage Books</button>
+                        <p className="text-xs text-slate-400 mb-6 relative z-10 leading-relaxed">Access hundreds of digital textbooks, academic papers, and reference materials.</p>
+                        <button onClick={() => router.push('/dashboard/student/library')} className="w-full bg-white text-slate-900 py-3 rounded-2xl font-bold text-sm relative z-10 hover:bg-slate-100 transition-colors shadow-lg shadow-white/10">Browse Catalog</button>
                     </div>
                 </div>
                     </div>
@@ -323,9 +324,9 @@ function UpcomingExamItem({ exam }: { exam: any }) {
     );
 }
 
-function QuickMenu({ icon, label }: { icon: any, label: string }) {
+function QuickMenu({ icon, label, onClick }: { icon: any, label: string, onClick?: () => void }) {
     return (
-        <div className="flex flex-col items-center justify-center p-6 bg-white rounded-3xl border border-white shadow-lg shadow-slate-200/40 hover:scale-105 transition-all text-slate-400 hover:text-indigo-600 hover:shadow-indigo-500/10">
+        <div onClick={onClick} className={`flex flex-col items-center justify-center p-6 bg-white rounded-3xl border border-white shadow-lg shadow-slate-200/40 hover:scale-105 transition-all text-slate-400 hover:text-indigo-600 hover:shadow-indigo-500/10 ${onClick ? 'cursor-pointer' : ''}`}>
             <div className="mb-2">{icon}</div>
             <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
         </div>

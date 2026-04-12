@@ -17,7 +17,8 @@ import {
     Menu,
     X,
     Bell,
-    CheckCircle2 as AttendanceIcon
+    CheckCircle2 as AttendanceIcon,
+    MessageCircle
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import StudentsView from "./components/Students";
@@ -27,17 +28,20 @@ import ExamSetter from "./components/ExamSetter";
 import StudentAwards from "./components/StudentAwards";
 import ClassCalendar from "./components/ClassCalendar";
 import AttendanceView from "./components/Attendance";
+import TeacherChat from "./components/TeacherChat";
 import { Loader2 } from "lucide-react";
 
 export default function TeacherDashboard() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
-    const [activeView, setActiveView] = useState<'DASHBOARD' | 'STUDENTS' | 'NOTEBOOK' | 'ASSIGNMENTS' | 'EXAMS' | 'AWARDS' | 'CALENDAR' | 'ATTENDANCE'>('DASHBOARD');
-    const [stats, setStats] = useState({
+    const [activeView, setActiveView] = useState<'DASHBOARD' | 'STUDENTS' | 'NOTEBOOK' | 'ASSIGNMENTS' | 'EXAMS' | 'AWARDS' | 'CALENDAR' | 'ATTENDANCE' | 'CHAT'>('DASHBOARD');
+    const [stats, setStats] = useState<any>({
         studentCount: 0,
         lessonNotesCount: 0,
         assignmentsCount: 0,
-        classesTodayCount: 0
+        recentActivity: [],
+        currentSession: "",
+        currentTerm: ""
     });
     const [loadingStats, setLoadingStats] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -58,7 +62,9 @@ export default function TeacherDashboard() {
                     studentCount: data.studentCount || 0,
                     lessonNotesCount: data.lessonNotesCount || 0,
                     assignmentsCount: data.assignmentsCount || 0,
-                    classesTodayCount: data.classesTodayCount || 0
+                    recentActivity: data.recentActivity || [],
+                    currentSession: data.currentSession,
+                    currentTerm: data.currentTerm
                 });
             }
         } catch (err) {
@@ -132,6 +138,7 @@ export default function TeacherDashboard() {
                     <SideIcon icon={<Award />} active={activeView === 'AWARDS'} onClick={() => { setActiveView('AWARDS'); setIsSidebarOpen(false); }} />
                     <SideIcon icon={<Calendar />} active={activeView === 'CALENDAR'} onClick={() => { setActiveView('CALENDAR'); setIsSidebarOpen(false); }} />
                     <SideIcon icon={<AttendanceIcon />} active={activeView === 'ATTENDANCE'} onClick={() => { setActiveView('ATTENDANCE'); setIsSidebarOpen(false); }} />
+                    <SideIcon icon={<MessageCircle />} active={activeView === 'CHAT'} onClick={() => { setActiveView('CHAT'); setIsSidebarOpen(false); }} />
                 </nav>
                 <button onClick={handleLogout} className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                     <LogOut className="w-6 h-6" />
@@ -156,13 +163,22 @@ export default function TeacherDashboard() {
                                             activeView === 'EXAMS' ? 'Set Exams' :
                                                 activeView === 'AWARDS' ? 'Student Awards' :
                                                     activeView === 'ATTENDANCE' ? 'Mark Attendance' :
-                                                        'Class Calendar'}
+                                                        activeView === 'CHAT' ? 'Messages' :
+                                                            'Class Calendar'}
                         </h1>
                     </div>
                     <div className="flex items-center space-x-3 lg:space-x-6">
-                        <div className="hidden md:flex items-center space-x-2 text-slate-500">
-                            <Calendar className="w-4 h-4" />
-                            <span className="text-sm font-medium">Monday, 24th May</span>
+                        <div className="hidden md:flex items-center space-x-4">
+                            <div className="flex items-center space-x-2 text-slate-500 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                                <Calendar className="w-4 h-4 text-emerald-600" />
+                                <span className="text-sm font-bold">Monday, 24th May</span>
+                            </div>
+                            {stats.currentSession && (
+                                <div className="flex items-center space-x-2 text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
+                                    <Clock className="w-4 h-4" />
+                                    <span className="text-sm font-black uppercase tracking-wider">{stats.currentSession} • {stats.currentTerm}</span>
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center space-x-3 pl-3 lg:pl-6 border-l border-slate-200">
                             <div className="text-right hidden sm:block">
@@ -198,9 +214,23 @@ export default function TeacherDashboard() {
                                         <button className="text-emerald-600 text-xs font-bold hover:underline">View Weekly</button>
                                     </div>
                                     <div className="space-y-4">
-                                        <ScheduleItem time="09:00 AM" subject="Advanced Mathematics" room="Room 204" active />
-                                        <ScheduleItem time="11:30 AM" subject="Physics Lab" room="Science Wing" />
-                                        <ScheduleItem time="02:00 PM" subject="Quantum Mechanics" room="Hall A" />
+                                        {stats.recentActivity.length === 0 ? (
+                                            <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                                <p className="text-slate-400 text-sm font-medium">No recent activity found</p>
+                                                <p className="text-[10px] text-slate-300 uppercase font-black tracking-widest mt-1">Create lesson notes or assignments to see them here</p>
+                                            </div>
+                                        ) : (
+                                            stats.recentActivity.map((activity: any) => (
+                                                <ScheduleItem 
+                                                    key={`${activity.type}-${activity.id}`}
+                                                    time={new Date(activity.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+                                                    subject={activity.subject} 
+                                                    room={activity.title} // Reusing room field for the topic/title
+                                                    active={new Date(activity.createdAt).toDateString() === new Date().toDateString()}
+                                                    type={activity.type}
+                                                />
+                                            ))
+                                        )}
                                     </div>
                                 </section>
                             </div>
@@ -258,6 +288,8 @@ export default function TeacherDashboard() {
                         <ClassCalendar />
                     ) : activeView === 'ATTENDANCE' ? (
                         <AttendanceView />
+                    ) : activeView === 'CHAT' ? (
+                        <TeacherChat />
                     ) : (
                         <div className="bg-white rounded-[2rem] border border-slate-200 p-20 text-center shadow-sm">
                             <h2 className="text-2xl font-black text-slate-900 mb-2">Coming Soon</h2>
@@ -295,9 +327,9 @@ function MiniStat({ value, label, icon, bg }: { value: string, label: string, ic
     );
 }
 
-function ScheduleItem({ time, subject, room, active = false }: { time: string, subject: string, room: string, active?: boolean }) {
+function ScheduleItem({ time, subject, room, active = false, type }: { time: string, subject: string, room: string, active?: boolean, type?: string }) {
     return (
-        <div className={`flex items-center p-5 rounded-2xl border transition-all ${active ? 'bg-emerald-50 border-emerald-100 scale-[1.02] shadow-sm' : 'bg-slate-50 border-slate-100 grayscale-[0.5] opacity-60'
+        <div className={`flex items-center p-5 rounded-2xl border transition-all ${active ? 'bg-emerald-50 border-emerald-100 scale-[1.02] shadow-sm' : 'bg-slate-50 border-slate-100'
             }`}>
             <div className="w-24 text-sm font-bold text-slate-400">{time}</div>
             <div className="flex-1">
@@ -307,7 +339,7 @@ function ScheduleItem({ time, subject, room, active = false }: { time: string, s
             {active && (
                 <div className="flex items-center space-x-2 text-[10px] font-bold text-emerald-600 uppercase bg-white px-3 py-1 rounded-full shadow-sm">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>In Progress</span>
+                    <span>{type === 'LESSON_NOTE' ? 'NOTE CREATED' : 'ASSIGNMENT CREATED'}</span>
                 </div>
             )}
         </div>

@@ -508,19 +508,16 @@ function ExamScheduleView() {
                                     ))}
                                 </select>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Class</label>
-                                    <select
-                                        value={form.class}
-                                        onChange={e => setForm({ ...form, class: e.target.value })}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                    >
-                                        <option value="Junior Secondary">Junior Secondary</option>
-                                        <option value="Senior Secondary">Senior Secondary</option>
-                                    </select>
-                                </div>
-                                </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Class</label>
+                                <select
+                                    value={form.class}
+                                    onChange={e => setForm({ ...form, class: e.target.value })}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                >
+                                    <option value="Junior Secondary">Junior Secondary</option>
+                                    <option value="Senior Secondary">Senior Secondary</option>
+                                </select>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">

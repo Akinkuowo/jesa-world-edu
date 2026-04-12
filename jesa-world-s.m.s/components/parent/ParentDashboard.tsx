@@ -9,7 +9,10 @@ export default function ParentDashboard() {
     const [student, setStudent] = useState<any>(null);
     const [results, setResults] = useState<any[]>([]);
     const [gradingSystem, setGradingSystem] = useState<any[]>([]);
+    const [attendance, setAttendance] = useState<any>({ records: [], summary: { total: 0, present: 0, late: 0, absent: 0, percentage: 0 } });
     const [loading, setLoading] = useState(true);
+    const [resultsTerm, setResultsTerm] = useState("");
+    const [attendanceTerm, setAttendanceTerm] = useState("");
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -24,6 +27,15 @@ export default function ParentDashboard() {
 
                 setStudent(user);
 
+                // Fetch fresh student profile from API
+                const profileRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/student/profile`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (profileRes.ok) {
+                    const profileData = await profileRes.json();
+                    setStudent(profileData);
+                }
+
                 // Fetch Academic Results
                 const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/student/results`, {
                     headers: { Authorization: `Bearer ${token}` }
@@ -34,6 +46,14 @@ export default function ParentDashboard() {
                     setResults(data.results || []);
                     setGradingSystem(data.grading || []);
                 }
+
+                // Fetch Attendance Records
+                const attRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/student/attendance`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (attRes.ok) {
+                    setAttendance(await attRes.json());
+                }
             } catch (error) {
                 console.error("Failed to fetch dashboard data:", error);
             } finally {
@@ -43,6 +63,42 @@ export default function ParentDashboard() {
 
         fetchDashboardData();
     }, [router]);
+
+    const fetchResults = async (term?: string) => {
+        try {
+            const token = localStorage.getItem("token");
+            const url = term 
+                ? `${process.env.NEXT_PUBLIC_API_URL}/student/results?term=${encodeURIComponent(term)}`
+                : `${process.env.NEXT_PUBLIC_API_URL}/student/results`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+                const data = await res.json();
+                setResults(data.results || []);
+                setGradingSystem(data.grading || []);
+            }
+        } catch (err) { console.error(err); }
+    };
+
+    const fetchAttendance = async (term?: string) => {
+        try {
+            const token = localStorage.getItem("token");
+            const url = term 
+                ? `${process.env.NEXT_PUBLIC_API_URL}/student/attendance?term=${encodeURIComponent(term)}`
+                : `${process.env.NEXT_PUBLIC_API_URL}/student/attendance`;
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+                setAttendance(await res.json());
+            }
+        } catch (err) { console.error(err); }
+    };
+
+    useEffect(() => {
+        fetchResults(resultsTerm || undefined);
+    }, [resultsTerm]);
+
+    useEffect(() => {
+        fetchAttendance(attendanceTerm || undefined);
+    }, [attendanceTerm]);
 
     const getGrade = (score: number) => {
         if (!gradingSystem.length) return { grade: "--", remark: "--", color: "text-slate-400" };
@@ -152,10 +208,10 @@ export default function ParentDashboard() {
                             <div className="w-12 h-12 bg-emerald-600/10 rounded-xl flex items-center justify-center">
                                 <Calendar className="w-6 h-6 text-emerald-400" />
                             </div>
-                            <span className="text-2xl font-bold text-emerald-400">--</span>
+                            <span className="text-2xl font-bold text-emerald-400">{attendance.summary.percentage}%</span>
                         </div>
                         <h3 className="text-slate-400 text-sm font-medium">Attendance Rate</h3>
-                        <p className="text-xs text-slate-600 mt-1">Feature coming soon</p>
+                        <p className="text-xs text-slate-600 mt-1">{attendance.summary.total} days recorded</p>
                     </div>
 
                     <div className="bg-[#11141b] rounded-2xl p-6 border border-white/5">
@@ -190,6 +246,16 @@ export default function ParentDashboard() {
                                 <BookOpen className="w-6 h-6 text-blue-400" />
                                 <span>Academic Results</span>
                             </h3>
+                            <select
+                                value={resultsTerm}
+                                onChange={e => setResultsTerm(e.target.value)}
+                                className="bg-[#1a1e2a] border border-white/10 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                            >
+                                <option value="">All Terms</option>
+                                <option value="1st Term">1st Term</option>
+                                <option value="2nd Term">2nd Term</option>
+                                <option value="3rd Term">3rd Term</option>
+                            </select>
                         </div>
 
                         {results.length > 0 ? (
@@ -284,18 +350,93 @@ export default function ParentDashboard() {
 
                 {/* Attendance Section */}
                 <div className="mt-8 bg-[#11141b] rounded-3xl border border-white/5 p-8">
-                    <h3 className="text-xl font-bold mb-6 flex items-center space-x-2">
-                        <Calendar className="w-6 h-6 text-emerald-400" />
-                        <span>Attendance Record</span>
-                    </h3>
-
-                    <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <Calendar className="w-8 h-8 text-slate-600" />
-                        </div>
-                        <p className="text-slate-500 font-medium mb-2">No attendance records available</p>
-                        <p className="text-slate-600 text-sm">Attendance data will be displayed here</p>
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl font-bold flex items-center space-x-2">
+                            <Calendar className="w-6 h-6 text-emerald-400" />
+                            <span>Attendance Record</span>
+                        </h3>
+                        <select
+                            value={attendanceTerm}
+                            onChange={e => setAttendanceTerm(e.target.value)}
+                            className="bg-[#1a1e2a] border border-white/10 text-white text-sm font-bold rounded-xl px-4 py-2 outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+                        >
+                            <option value="">All Terms</option>
+                            <option value="1st Term">1st Term</option>
+                            <option value="2nd Term">2nd Term</option>
+                            <option value="3rd Term">3rd Term</option>
+                        </select>
                     </div>
+
+                    {attendance.records.length > 0 ? (
+                        <>
+                            {/* Summary Bar */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-emerald-500/10 rounded-2xl p-4 text-center border border-emerald-500/10">
+                                    <CheckCircle className="w-5 h-5 text-emerald-400 mx-auto mb-2" />
+                                    <span className="text-2xl font-black text-emerald-400">{attendance.summary.present}</span>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Present</p>
+                                </div>
+                                <div className="bg-amber-500/10 rounded-2xl p-4 text-center border border-amber-500/10">
+                                    <Clock className="w-5 h-5 text-amber-400 mx-auto mb-2" />
+                                    <span className="text-2xl font-black text-amber-400">{attendance.summary.late}</span>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Late</p>
+                                </div>
+                                <div className="bg-red-500/10 rounded-2xl p-4 text-center border border-red-500/10">
+                                    <XCircle className="w-5 h-5 text-red-400 mx-auto mb-2" />
+                                    <span className="text-2xl font-black text-red-400">{attendance.summary.absent}</span>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Absent</p>
+                                </div>
+                                <div className="bg-blue-500/10 rounded-2xl p-4 text-center border border-blue-500/10">
+                                    <Calendar className="w-5 h-5 text-blue-400 mx-auto mb-2" />
+                                    <span className="text-2xl font-black text-blue-400">{attendance.summary.total}</span>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Total Days</p>
+                                </div>
+                            </div>
+
+                            {/* Attendance Table */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="text-slate-500 text-xs font-bold uppercase tracking-wider border-b border-white/5">
+                                            <th className="pb-4 pr-4">Date</th>
+                                            <th className="pb-4 px-4">Status</th>
+                                            <th className="pb-4 px-4">Term</th>
+                                            <th className="pb-4 pl-4 text-right">Class</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {attendance.records.map((rec: any) => (
+                                            <tr key={rec.id} className="group hover:bg-white/5 transition-colors">
+                                                <td className="py-4 pr-4 text-slate-300 text-sm font-medium">
+                                                    {new Date(rec.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                                                </td>
+                                                <td className="py-4 px-4">
+                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                                                        rec.status === 'PRESENT' ? 'bg-emerald-500/10 text-emerald-400' :
+                                                        rec.status === 'LATE' ? 'bg-amber-500/10 text-amber-400' :
+                                                        'bg-red-500/10 text-red-400'
+                                                    }`}>
+                                                        {rec.status === 'PRESENT' ? <CheckCircle className="w-3 h-3" /> : rec.status === 'LATE' ? <Clock className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                                        {rec.status}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-4 text-slate-500 text-sm">{rec.term || '--'}</td>
+                                                <td className="py-4 pl-4 text-right text-slate-500 text-sm">{rec.class || '--'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-12">
+                            <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <Calendar className="w-8 h-8 text-slate-600" />
+                            </div>
+                            <p className="text-slate-500 font-medium mb-2">No attendance records available</p>
+                            <p className="text-slate-600 text-sm">Attendance data will appear once marked by a teacher</p>
+                        </div>
+                    )}
                 </div>
             </main>
         </div>

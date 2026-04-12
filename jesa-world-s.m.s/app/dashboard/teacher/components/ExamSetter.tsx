@@ -44,6 +44,8 @@ export default function ExamSetter() {
     ]);
     const [chatInput, setChatInput] = useState("");
     const [bankFilter, setBankFilter] = useState<'MCQ' | 'THEORY'>('MCQ');
+    const [filterSession, setFilterSession] = useState("");
+    const [filterTerm, setFilterTerm] = useState("");
     const [isAILoading, setIsAILoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [newQuestion, setNewQuestion] = useState<{
@@ -51,6 +53,8 @@ export default function ExamSetter() {
         subject: string,
         class: string,
         term: string,
+        session?: string,
+        type?: 'MCQ' | 'THEORY',
         question: string,
         options: string[],
         answer: string,
@@ -69,12 +73,12 @@ export default function ExamSetter() {
 
     const [savedQuestions, setSavedQuestions] = useState<any[]>([]);
     const [copied, setCopied] = useState(false);
-    const [teacherData, setTeacherData] = useState<{ subjects: string[], classes: string[] }>({ subjects: [], classes: [] });
+    const [teacherData, setTeacherData] = useState<{ subjects: string[], classes: string[], currentTerm?: string, currentSession?: string }>({ subjects: [], classes: [] });
     const [toast, setToast] = useState<{ show: boolean, message: string, type: 'success' | 'error' }>({ show: false, message: '', type: 'success' });
     const [selectedSubjectBank, setSelectedSubjectBank] = useState<string | null>(null);
     const [selectedClassBank, setSelectedClassBank] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean, id: string | string[] | null }>({ show: false, id: null });
+    const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean, id: string | string[] | null, className?: string }>({ show: false, id: null });
     const chatEndRef = useRef<HTMLDivElement>(null);
 
     const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -84,7 +88,9 @@ export default function ExamSetter() {
 
     const fetchQuestions = async () => {
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions`, {
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/teacher/exams/questions`);
+            
+            const response = await fetch(url.toString(), {
                 headers: {
                     "Authorization": `Bearer ${localStorage.getItem("token")}`
                 }
@@ -99,8 +105,6 @@ export default function ExamSetter() {
     };
 
     useEffect(() => {
-        fetchQuestions();
-
         const fetchTeacherData = async () => {
             try {
                 const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teacher/my-data`, {
@@ -116,7 +120,9 @@ export default function ExamSetter() {
                         setNewQuestion(prev => ({
                             ...prev,
                             subject: data.subjects[0] || "",
-                            class: "" // Let them select from the filtered list
+                            class: "", // Let them select from the filtered list
+                            term: data.currentTerm || "First Term",
+                            session: data.currentSession || ""
                         }));
                     }
                 }
@@ -125,6 +131,10 @@ export default function ExamSetter() {
             }
         };
         fetchTeacherData();
+    }, []);
+
+    useEffect(() => {
+        fetchQuestions();
     }, []);
 
     useEffect(() => {
@@ -240,7 +250,17 @@ export default function ExamSetter() {
     };
 
     const handleDeleteQuestion = (id: string) => {
-        setDeleteConfirm({ show: true, id });
+        setDeleteConfirm({ show: true, id, className: undefined });
+    };
+
+    const handleDeleteClass = (cls: string) => {
+        const ids = savedQuestions
+            .filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === cls)
+            .map(q => q.id);
+        
+        if (ids.length > 0) {
+            setDeleteConfirm({ show: true, id: ids, className: cls });
+        }
     };
 
     const confirmDelete = async () => {
@@ -253,12 +273,16 @@ export default function ExamSetter() {
             const method = isBulk ? "POST" : "DELETE";
             const body = isBulk ? JSON.stringify({ ids: deleteConfirm.id }) : undefined;
 
+            const headers: any = {
+                "Authorization": `Bearer ${localStorage.getItem("token")}`
+            };
+            if (body) {
+                headers["Content-Type"] = "application/json";
+            }
+
             const response = await fetch(url, {
                 method,
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${localStorage.getItem("token")}`
-                },
+                headers,
                 body
             });
             if (response.ok) {
@@ -405,24 +429,9 @@ export default function ExamSetter() {
                                             onChange={(e) => setNewQuestion({ ...newQuestion, class: e.target.value })}
                                         >
                                             <option key="default" value="">Select Class</option>
-                                            {(() => {
-                                                const isJunior = teacherData.classes.some(c => c.toUpperCase().includes('JS')) || 
-                                                                teacherData.subjects.some(s => s.toUpperCase().includes('JS') || s.toUpperCase().includes('JUNIOR'));
-                                                const isSenior = teacherData.classes.some(c => c.toUpperCase().includes('SS')) || 
-                                                                teacherData.subjects.some(s => s.toUpperCase().includes('SS') || s.toUpperCase().includes('SENIOR'));
-                                                
-                                                const options = [];
-                                                if (isJunior || (!isJunior && !isSenior)) {
-                                                    options.push("JS 1", "JS 2", "JS 3");
-                                                }
-                                                if (isSenior || (!isJunior && !isSenior)) {
-                                                    options.push("SS 1", "SS 2", "SS 3");
-                                                }
-                                                
-                                                return Array.from(new Set(options)).map((cls, i) => (
-                                                    <option key={i} value={cls}>{cls}</option>
-                                                ));
-                                            })()}
+                                            {["JS 1", "JS 2", "JS 3", "SS 1", "SS 2", "SS 3"].map((cls, i) => (
+                                                <option key={i} value={cls}>{cls}</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div className="space-y-3">
@@ -676,7 +685,7 @@ export default function ExamSetter() {
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {teacherData.subjects.map(subject => {
-                                        const count = savedQuestions.filter(q => q.subject === subject).length;
+                                        const count = savedQuestions.filter(q => q.subject === subject && q.type === bankFilter && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length;
                                         return (
                                             <button
                                                 key={subject}
@@ -714,8 +723,8 @@ export default function ExamSetter() {
                                         <h3 className="text-xl font-black text-slate-800 tracking-tight">{selectedSubjectBank} {selectedClassBank ? `- Class ${selectedClassBank}` : ''} Bank</h3>
                                         <p className="text-sm font-medium text-slate-500">
                                             {selectedClassBank 
-                                                ? `${savedQuestions.filter(q => q.subject === selectedSubjectBank && q.class === selectedClassBank).length} Questions for this class` 
-                                                : `${savedQuestions.filter(q => q.subject === selectedSubjectBank).length} Total Questions`
+                                                ? `${savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === selectedClassBank && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length} ${bankFilter === 'MCQ' ? 'Objective' : 'Theory'} Questions` 
+                                                : `${savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length} Total ${bankFilter === 'MCQ' ? 'Objective' : 'Theory'} Questions`
                                             }
                                         </p>
                                     </div>
@@ -733,14 +742,16 @@ export default function ExamSetter() {
                                     <button
                                         onClick={() => {
                                             setNewQuestion({ 
-                                                subject: selectedSubjectBank, 
-                                                class: selectedClassBank || teacherData.classes[0] || "", 
-                                                term: "First Term", 
+                                                subject: teacherData.subjects[0] || "", 
+                                                class: "", 
+                                                type: 'MCQ', 
                                                 question: "", 
                                                 answer: "", 
                                                 options: ["", "", "", ""], 
                                                 marks: 1,
-                                                calculatorEnabled: false
+                                                calculatorEnabled: false,
+                                                term: teacherData.currentTerm || "First Term",
+                                                session: teacherData.currentSession || ""
                                             });
                                             setView('CREATE');
                                         }}
@@ -753,33 +764,67 @@ export default function ExamSetter() {
                             </div>
 
                              <div className="flex items-center justify-between mb-8">
-                                <div className="flex p-1 bg-slate-100 rounded-2xl w-fit">
-                                    <button
-                                        onClick={() => {
-                                            setBankFilter('MCQ');
-                                            setSelectedIds(new Set());
+                                <div className="flex items-center space-x-3">
+                                    <div className="flex p-1 bg-slate-100 rounded-2xl w-fit">
+                                        <button
+                                            onClick={() => {
+                                                setBankFilter('MCQ');
+                                                setSelectedIds(new Set());
+                                            }}
+                                            className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${bankFilter === 'MCQ' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        >
+                                            Objectives (MCQ)
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setBankFilter('THEORY');
+                                                setSelectedIds(new Set());
+                                            }}
+                                            className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${bankFilter === 'THEORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        >
+                                            Theory/Essay
+                                        </button>
+                                    </div>
+
+                                    {/* Session Filter */}
+                                    <select
+                                        value={filterSession}
+                                        onChange={(e) => {
+                                            setFilterSession(e.target.value);
+                                            setFilterTerm(""); // Reset term when session changes
                                         }}
-                                        className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${bankFilter === 'MCQ' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                                        className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 appearance-none cursor-pointer"
                                     >
-                                        Objectives (MCQ)
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setBankFilter('THEORY');
-                                            setSelectedIds(new Set());
-                                        }}
-                                        className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${bankFilter === 'THEORY' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-                                    >
-                                        Theory/Essay
-                                    </button>
+                                        <option value="">All Sessions</option>
+                                        {Array.from(new Set(savedQuestions.map(q => q.session))).filter(Boolean).sort().map(sess => (
+                                            <option key={sess} value={sess}>{sess}</option>
+                                        ))}
+                                    </select>
+
+                                    {/* Term Filter - Hierarchical */}
+                                    {filterSession && (
+                                        <div className="flex items-center animate-in slide-in-from-left-2 duration-300">
+                                            <span className="w-4 h-px bg-slate-200 mx-2" />
+                                            <select
+                                                value={filterTerm}
+                                                onChange={(e) => setFilterTerm(e.target.value)}
+                                                className="bg-indigo-50 border border-indigo-100 rounded-2xl px-6 py-2.5 text-xs font-black uppercase tracking-widest text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 appearance-none cursor-pointer"
+                                            >
+                                                <option value="">All Terms</option>
+                                                {Array.from(new Set(savedQuestions.filter(q => q.session === filterSession).map(q => q.term))).filter(Boolean).sort().map(term => (
+                                                    <option key={term as string} value={term}>{term}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (selectedClassBank ? q.class === selectedClassBank : true)).length > 0 && (
+                                {savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (selectedClassBank ? q.class === selectedClassBank : true) && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length > 0 && (
                                     <label className="flex items-center space-x-3 cursor-pointer group">
                                         <div 
-                                            onClick={() => toggleSelectAll(savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (selectedClassBank ? q.class === selectedClassBank : true)))}
+                                            onClick={() => toggleSelectAll(savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (selectedClassBank ? q.class === selectedClassBank : true) && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)))}
                                             className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                                                selectedIds.size === savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (selectedClassBank ? q.class === selectedClassBank : true)).length && selectedIds.size > 0
+                                                selectedIds.size === savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (selectedClassBank ? q.class === selectedClassBank : true) && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length && selectedIds.size > 0
                                                 ? 'bg-indigo-600 border-indigo-600' 
                                                 : 'bg-white border-slate-200 group-hover:border-indigo-400'
                                             }`}
@@ -803,7 +848,7 @@ export default function ExamSetter() {
                                         </div>
                                     </div>
 
-                                    {Array.from(new Set(savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter).map(q => q.class))).length === 0 ? (
+                                    {Array.from(new Set(savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).map(q => q.class))).length === 0 ? (
                                         <div className="text-center py-20 px-6 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
                                             <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
                                                 <FileQuestion className="w-8 h-8 text-slate-300" />
@@ -813,20 +858,31 @@ export default function ExamSetter() {
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {Array.from(new Set(savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter).map(q => q.class))).sort().map(cls => {
-                                                const count = savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === cls).length;
+                                            {Array.from(new Set(savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).map(q => q.class))).sort().map(cls => {
+                                                const count = savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === cls && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length;
                                                 return (
-                                                    <button
-                                                        key={cls}
-                                                        onClick={() => setSelectedClassBank(cls)}
-                                                        className="flex flex-col text-left p-6 rounded-[1.5rem] border-2 border-slate-100 hover:border-indigo-500/30 hover:bg-slate-50 transition-all group"
-                                                    >
-                                                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Class</span>
-                                                        <span className="text-lg font-black text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">{cls}</span>
-                                                        <div className="flex items-center space-x-2 text-sm font-bold text-slate-500">
-                                                            <span className="px-3 py-1 bg-slate-100 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">{count} Question{count !== 1 ? 's' : ''}</span>
-                                                        </div>
-                                                    </button>
+                                                    <div key={cls} className="relative group">
+                                                        <button
+                                                            onClick={() => setSelectedClassBank(cls)}
+                                                            className="w-full flex flex-col text-left p-6 rounded-[1.5rem] border-2 border-slate-100 hover:border-indigo-500/30 hover:bg-slate-50 transition-all"
+                                                        >
+                                                            <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Class</span>
+                                                            <span className="text-lg font-black text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">{cls}</span>
+                                                            <div className="flex items-center space-x-2 text-sm font-bold text-slate-500">
+                                                                <span className="px-3 py-1 bg-slate-100 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">{count} Question{count !== 1 ? 's' : ''}</span>
+                                                            </div>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteClass(cls);
+                                                            }}
+                                                            className="absolute top-4 right-4 p-3 bg-red-50 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                                                            title={`Delete all ${cls} questions`}
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
@@ -834,7 +890,7 @@ export default function ExamSetter() {
                                 </>
                             ) : (
                                 <>
-                                    {savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === selectedClassBank).length === 0 ? (
+                                    {savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === selectedClassBank && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).length === 0 ? (
                                         <div className="flex flex-col items-center justify-center h-full text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
                                             <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
                                                 <FileQuestion className="w-8 h-8 text-slate-300" />
@@ -844,7 +900,7 @@ export default function ExamSetter() {
                                         </div>
                                     ) : (
                                         <div className="space-y-6">
-                                            {savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === selectedClassBank).map((q) => (
+                                            {savedQuestions.filter(q => q.subject === selectedSubjectBank && q.type === bankFilter && q.class === selectedClassBank && (filterSession ? q.session === filterSession : true) && (filterTerm ? q.term === filterTerm : true)).map((q) => (
                                                 <div key={q.id} className={`p-6 border-2 rounded-[1.5rem] transition-all group flex flex-col space-y-4 ${selectedIds.has(q.id) ? 'border-indigo-500 bg-indigo-50/30' : 'border-slate-100 bg-white hover:border-indigo-500/30 hover:shadow-lg hover:shadow-slate-200/50'}`}>
                                                     <div className="flex justify-between items-start">
                                                         <div className="flex items-center space-x-4">
@@ -922,11 +978,15 @@ export default function ExamSetter() {
                         <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-6">
                             <Trash2 className="w-8 h-8 text-red-500" />
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900 mb-2">{Array.isArray(deleteConfirm.id) ? 'Bulk Delete Questions?' : 'Delete Question?'}</h3>
+                        <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                            {deleteConfirm.className ? `Delete ${deleteConfirm.className} Questions?` : Array.isArray(deleteConfirm.id) ? 'Bulk Delete Questions?' : 'Delete Question?'}
+                        </h3>
                         <p className="text-slate-500 font-medium mb-8">
-                            {Array.isArray(deleteConfirm.id) 
-                                ? `Are you sure you want to delete ${deleteConfirm.id.length} exam questions? This action cannot be undone and will remove them from your question bank.`
-                                : "Are you sure you want to delete this exam question? This action cannot be undone and will remove it from your question bank."
+                            {deleteConfirm.className 
+                                ? `Are you sure you want to delete all ${Array.isArray(deleteConfirm.id) ? deleteConfirm.id.length : ''} questions for class ${deleteConfirm.className}? This will wipe them from this subject bank.`
+                                : Array.isArray(deleteConfirm.id) 
+                                    ? `Are you sure you want to delete ${deleteConfirm.id.length} exam questions? This action cannot be undone.`
+                                    : "Are you sure you want to delete this exam question? This action cannot be undone."
                             }
                         </p>
                         <div className="grid grid-cols-2 gap-4">

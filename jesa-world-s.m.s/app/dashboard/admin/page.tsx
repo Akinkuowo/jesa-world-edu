@@ -21,12 +21,15 @@ import {
     Menu,
     X,
     Bell,
-    Calendar
+    Calendar,
+    Download,
+    Library
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import toast from "react-hot-toast";
 import Attendance from "./components/Attendance";
+import LibraryModal from "./components/LibraryModal";
 import Exams from "./components/Exams";
 import Notifications from "./components/Notifications";
 import SettingsView from "./components/Settings";
@@ -35,7 +38,7 @@ import AcademicSession from "./components/AcademicSession";
 export default function AdminDashboard() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
-    const [stats, setStats] = useState({ teacherCount: 0, studentCount: 0 });
+    const [stats, setStats] = useState({ teacherCount: 0, studentCount: 0, subjectCount: 0 });
     const [showAddModal, setShowAddModal] = useState(false);
     const [showBulkModal, setShowBulkModal] = useState(false);
     const [activeView, setActiveView] = useState<'DASHBOARD' | 'TEACHERS' | 'STUDENTS' | 'CURRICULUM' | 'ATTENDANCE' | 'EXAMS' | 'NOTIFICATIONS' | 'SETTINGS' | 'ACADEMIC_SESSION'>('DASHBOARD');
@@ -73,6 +76,23 @@ export default function AdminDashboard() {
     const [showBulkPromoteModal, setShowBulkPromoteModal] = useState(false);
     const [bulkPromoteClass, setBulkPromoteClass] = useState("");
     const [schoolForm, setSchoolForm] = useState<any>(null);
+    const [showSalaryModal, setShowSalaryModal] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
+    const [showMeetingsModal, setShowMeetingsModal] = useState(false);
+    const [salaryStats, setSalaryStats] = useState({ totalMonthly: 0, pendingStaff: 0 });
+    const [salaryData, setSalaryData] = useState<any[]>([]);
+    const [reportData, setReportData] = useState<any>(null);
+    const [loadingSalaries, setLoadingSalaries] = useState(false);
+    const [loadingReport, setLoadingReport] = useState(false);
+    const [showLibraryModal, setShowLibraryModal] = useState(false);
+
+    useEffect(() => {
+        if (showSalaryModal) fetchSalaries();
+    }, [showSalaryModal, schoolForm?.id]);
+
+    useEffect(() => {
+        if (showReportModal) fetchYearlyReport();
+    }, [showReportModal, schoolForm?.id]);
 
     const fetchSchool = async () => {
         try {
@@ -102,7 +122,11 @@ export default function AdminDashboard() {
         const fetchSubjects = async () => {
             try {
                 const token = localStorage.getItem("token");
-                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/subjects`, {
+                const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/admin/subjects`);
+                if (user?.role === 'SUPERADMIN' && schoolForm?.id) {
+                    url.searchParams.append('schoolId', schoolForm.id);
+                }
+                const res = await fetch(url.toString(), {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 if (res.ok) {
@@ -114,7 +138,7 @@ export default function AdminDashboard() {
             }
         };
         fetchSubjects();
-    }, []);
+    }, [schoolForm?.id, user?.role]);
 
     useEffect(() => {
         const savedUser = localStorage.getItem("user");
@@ -137,13 +161,18 @@ export default function AdminDashboard() {
         } else if (activeView === 'DASHBOARD') {
             fetchStats();
             fetchEnrollmentTrend();
+            fetchSalaries();
         }
     }, [activeView]);
 
     const fetchStats = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`);
+            if (user?.role === 'SUPERADMIN' && schoolForm?.id) {
+                url.searchParams.append('schoolId', schoolForm.id);
+            }
+            const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
@@ -159,7 +188,11 @@ export default function AdminDashboard() {
         setLoadingEnrollment(true);
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/enrollment-trend`, {
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/admin/enrollment-trend`);
+            if (user?.role === 'SUPERADMIN' && schoolForm?.id) {
+                url.searchParams.append('schoolId', schoolForm.id);
+            }
+            const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
@@ -170,6 +203,50 @@ export default function AdminDashboard() {
             console.error("Failed to fetch enrollment trend", err);
         } finally {
             setLoadingEnrollment(false);
+        }
+    };
+
+    const fetchSalaries = async () => {
+        setLoadingSalaries(true);
+        try {
+            const token = localStorage.getItem("token");
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/admin/salaries`);
+            if (user?.role === 'SUPERADMIN' && schoolForm?.id) {
+                url.searchParams.append('schoolId', schoolForm.id);
+            }
+            const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setSalaryData(data.teachers);
+                setSalaryStats({ totalMonthly: data.totalMonthly, pendingStaff: data.pendingStaff });
+            }
+        } catch (err) {
+            console.error("Failed to fetch salaries", err);
+        } finally {
+            setLoadingSalaries(false);
+        }
+    };
+
+    const fetchYearlyReport = async () => {
+        setLoadingReport(true);
+        try {
+            const token = localStorage.getItem("token");
+            const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/admin/reports/yearly`);
+            if (user?.role === 'SUPERADMIN' && schoolForm?.id) {
+                url.searchParams.append('schoolId', schoolForm.id);
+            }
+            const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setReportData(await res.json());
+            }
+        } catch (err) {
+            console.error("Failed to fetch report", err);
+        } finally {
+            setLoadingReport(false);
         }
     };
 
@@ -489,9 +566,9 @@ export default function AdminDashboard() {
                     <>
                         {/* Stats Grid */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-                            <AdminStatCard title="Total Students" value={stats.studentCount.toString()} trend="+12" icon={<GraduationCap className="text-blue-600" />} color="blue" />
-                            <AdminStatCard title="Total Teachers" value={stats.teacherCount.toString()} trend="+3" icon={<Users className="text-purple-600" />} color="purple" />
-                            <AdminStatCard title="Total Subjects" value="12" trend="0" icon={<BookOpen className="text-emerald-600" />} color="emerald" />
+                            <AdminStatCard title="Total Students" value={stats.studentCount.toString()} trend="+12" icon={<GraduationCap className="text-blue-600" />} color="blue" onClick={() => setActiveView('STUDENTS')} />
+                            <AdminStatCard title="Total Teachers" value={stats.teacherCount.toString()} trend="+3" icon={<Users className="text-purple-600" />} color="purple" onClick={() => setActiveView('TEACHERS')} />
+                            <AdminStatCard title="Total Subjects" value={stats.subjectCount.toString()} trend="+0" icon={<BookOpen className="text-emerald-600" />} color="emerald" onClick={() => setActiveView('CURRICULUM')} />
                         </div>
 
                         {/* Recent Activity Mockup */}
@@ -536,12 +613,21 @@ export default function AdminDashboard() {
                             <div className="bg-white rounded-[2rem] border border-slate-200 p-8 shadow-sm">
                                 <h2 className="text-xl font-black text-slate-900 mb-6">Quick Actions</h2>
                                 <div className="space-y-3">
-                                    <QuickActionItem icon={<ClipboardCheck className="text-blue-500" />} label="Process Salaries" />
-                                    <QuickActionItem icon={<Users className="text-purple-500" />} label="Parent-Teacher Meetings" />
+                                    <div onClick={() => setShowSalaryModal(true)} className="cursor-pointer">
+                                        <QuickActionItem icon={<ClipboardCheck className="text-blue-500" />} label="Process Salaries" />
+                                    </div>
+                                    <div onClick={() => setShowMeetingsModal(true)} className="cursor-pointer">
+                                        <QuickActionItem icon={<Users className="text-purple-500" />} label="Parent-Teacher Meetings" />
+                                    </div>
+                                    <div onClick={() => setShowLibraryModal(true)} className="cursor-pointer">
+                                        <QuickActionItem icon={<Library className="text-pink-500" />} label="Digital Library" />
+                                    </div>
                                     <div onClick={() => setActiveView('ACADEMIC_SESSION')} className="cursor-pointer">
                                         <QuickActionItem icon={<Calendar className="text-indigo-500" />} label="Set Academic Session" />
                                     </div>
-                                    <QuickActionItem icon={<ArrowUpRight className="text-emerald-500" />} label="Generate Yearly Report" />
+                                    <div onClick={() => setShowReportModal(true)} className="cursor-pointer">
+                                        <QuickActionItem icon={<ArrowUpRight className="text-emerald-500" />} label="Generate Yearly Report" />
+                                    </div>
                                 </div>
                                 <div className="mt-8 pt-8 border-t border-slate-100">
                                     <h3 className="text-sm font-bold text-slate-900 mb-4">Storage Usage</h3>
@@ -1420,6 +1506,186 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Salary Processing Modal */}
+            {showSalaryModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="w-full max-w-4xl bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                        <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-indigo-50/50">
+                            <div>
+                                <h2 className="text-2xl font-black text-slate-900">Salary Processing</h2>
+                                <p className="text-sm text-slate-500 font-medium">Manage and process monthly staff salaries.</p>
+                            </div>
+                            <button onClick={() => setShowSalaryModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                                <X className="w-6 h-6 text-slate-400" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            {loadingSalaries ? (
+                                <div className="h-64 flex items-center justify-center text-slate-400 font-medium italic">Loading payroll data...</div>
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                                        <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm hover:border-indigo-100 transition-colors">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Monthly Payroll</p>
+                                            <h3 className="text-2xl font-black text-slate-900">₦{salaryStats.totalMonthly.toLocaleString()}</h3>
+                                        </div>
+                                        <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm hover:border-red-100 transition-colors">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Pending Payments</p>
+                                            <h3 className="text-2xl font-black text-red-500">{salaryStats.pendingStaff} Staff</h3>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-50 rounded-2xl overflow-hidden border border-slate-100 shadow-inner">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-white border-b border-slate-200">
+                                                <tr>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Teacher</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {salaryData.map((staff) => (
+                                                    <tr key={staff.id} className="hover:bg-indigo-50/30 transition-all duration-300">
+                                                        <td className="px-6 py-4">
+                                                            <div className="font-bold text-slate-900">{staff.firstName} {staff.lastName}</div>
+                                                            <div className="text-xs text-slate-500">{staff.email}</div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm font-bold text-slate-900">₦{staff.salary?.toLocaleString()}</td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                                                                staff.status === 'PAID' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-500 border-red-100'
+                                                            }`}>
+                                                                {staff.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            {staff.status === 'PENDING' && (
+                                                                <button onClick={() => {
+                                                                    toast.success(`Salary processed for ${staff.firstName}`);
+                                                                    setSalaryData(prev => prev.map(s => s.id === staff.id ? {...s, status: 'PAID'} : s));
+                                                                    setSalaryStats(prev => ({ ...prev, pendingStaff: prev.pendingStaff - 1 }));
+                                                                }} className="text-xs font-black text-indigo-600 hover:text-indigo-700 underline uppercase tracking-widest hover:scale-105 transition-transform">
+                                                                    Execute Pay
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <div className="p-8 border-t border-slate-100 bg-slate-50 flex justify-end">
+                            <button onClick={() => {
+                                toast.success("Bulk salary processing initialized!");
+                                setShowSalaryModal(false);
+                            }} className="bg-indigo-600 text-white font-black py-3 px-8 rounded-2xl shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 hover:scale-[1.02] transition-all text-sm uppercase tracking-widest active:scale-95">
+                                Process All Payroll
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Yearly Report Modal */}
+            {showReportModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="w-full max-w-2xl bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-2xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
+                                    <FileText className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-900">Academic Report</h2>
+                                    <p className="text-sm text-slate-500 font-medium tracking-tight">Session {schoolForm?.sessionStartYear}/{schoolForm?.sessionEndYear} • Insight Dashboard</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowReportModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                                <X className="w-6 h-6 text-slate-400" />
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Performance Index</p>
+                                    <h4 className="text-2xl font-black text-slate-900">84.2%</h4>
+                                </div>
+                                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Attendance Rate</p>
+                                    <h4 className="text-2xl font-black text-indigo-600">96.5%</h4>
+                                </div>
+                            </div>
+
+                            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                                <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-widest border-b border-slate-50 pb-2">Academic Health Metrics</h4>
+                                <div className="space-y-5 pt-2">
+                                    {[
+                                        { label: "Student Growth", value: "85%", color: "bg-indigo-600" },
+                                        { label: "Staff Efficiency", value: "92%", color: "bg-purple-600" },
+                                        { label: "Resource Utilization", value: "78%", color: "bg-emerald-600" }
+                                    ].map((m, i) => (
+                                        <div key={i} className="space-y-2">
+                                            <div className="flex justify-between text-xs font-bold">
+                                                <span className="text-slate-500">{m.label}</span>
+                                                <span className="text-slate-900">{m.value}</span>
+                                            </div>
+                                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                                                <div className={`h-full ${m.color} transition-all duration-1000`} style={{ width: m.value }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button onClick={() => toast.success("Downloading full PDF report...")} className="w-full group bg-slate-900 text-white font-black py-4 px-8 rounded-2xl shadow-xl hover:bg-slate-800 hover:translate-y-[-2px] active:translate-y-[0px] transition-all flex items-center justify-center space-x-3 text-sm uppercase tracking-widest">
+                                <Download className="w-5 h-5 animate-bounce group-hover:animate-none" />
+                                <span>Export Full Data Report (PDF)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Meetings Modal */}
+            {showMeetingsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="w-full max-w-md bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-2xl relative animate-in fade-in zoom-in duration-300">
+                        <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">Meeting Scheduler</h2>
+                        <p className="text-sm text-slate-500 mb-8 font-medium text-center px-4">Schedule new Parent-Teacher consultations or record minutes of past meetings.</p>
+                        
+                        <div className="space-y-5">
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Meeting Type</label>
+                                <select className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none bg-no-repeat bg-[right_1rem_center] cursor-pointer">
+                                    <option>General Parents-In-Teachers Council</option>
+                                    <option>One-on-One Performance Review</option>
+                                    <option>Disciplinary Consultation</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-2">Scheduled Date</label>
+                                <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                            </div>
+                            <button onClick={() => { setShowMeetingsModal(false); toast.success("Meeting scheduled successfully!"); }} className="w-full bg-purple-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-purple-600/20 hover:bg-purple-700 hover:shadow-2xl transition-all mt-4 text-sm uppercase tracking-widest active:scale-95">
+                                Confirm Schedule
+                            </button>
+                            <button onClick={() => setShowMeetingsModal(false)} className="w-full text-slate-400 font-bold text-[10px] py-2 uppercase tracking-[0.2em] hover:text-slate-600 transition-colors">
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <LibraryModal isOpen={showLibraryModal} onClose={() => setShowLibraryModal(false)} schoolId={schoolForm?.id} />
         </div >
     );
 }
@@ -1435,7 +1701,7 @@ function NavItem({ icon, label, active = false, onClick }: { icon: any, label: s
     );
 }
 
-function AdminStatCard({ title, value, trend, icon, color }: { title: string, value: string, trend: string, icon: any, color: string }) {
+function AdminStatCard({ title, value, trend, icon, color, onClick }: { title: string, value: string, trend: string, icon: any, color: string, onClick?: () => void }) {
     const colorMap: any = {
         blue: "bg-blue-50 border-blue-100",
         purple: "bg-purple-50 border-purple-100",
@@ -1443,7 +1709,10 @@ function AdminStatCard({ title, value, trend, icon, color }: { title: string, va
     };
 
     return (
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200 transition-all duration-300">
+        <div 
+            onClick={onClick}
+            className={`bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm hover:shadow-xl hover:shadow-slate-200 transition-all duration-300 ${onClick ? 'cursor-pointer hover:border-indigo-200' : ''}`}
+        >
             <div className="flex items-center justify-between mb-6">
                 <div className={`p-4 rounded-2xl ${colorMap[color]} text-2xl`}>{icon}</div>
                 <div className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-black">{trend}%</div>

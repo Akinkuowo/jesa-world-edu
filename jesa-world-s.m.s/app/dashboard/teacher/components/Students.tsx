@@ -16,8 +16,10 @@ import {
 export default function StudentsView() {
     const [students, setStudents] = useState<any[]>([]);
     const [teacherSubjects, setTeacherSubjects] = useState<string[]>([]);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [filterSubject, setFilterSubject] = useState("");
+    const [filterClass, setFilterClass] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
     const fetchStudents = async () => {
@@ -26,6 +28,7 @@ export default function StudentsView() {
             const token = localStorage.getItem("token");
             const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/teacher/students`);
             if (filterSubject) url.searchParams.append("subject", filterSubject);
+            if (filterClass) url.searchParams.append("class", filterClass);
 
             const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${token}` }
@@ -34,6 +37,7 @@ export default function StudentsView() {
             if (res.ok) {
                 setStudents(data.students || []);
                 setTeacherSubjects(data.teacherSubjects || []);
+                setAvailableClasses(data.availableClasses || []);
             }
         } catch (err) {
             console.error(err);
@@ -44,7 +48,7 @@ export default function StudentsView() {
 
     useEffect(() => {
         fetchStudents();
-    }, [filterSubject]);
+    }, [filterSubject, filterClass]);
 
     const filteredStudents = students.filter(s =>
         (s.firstName + " " + s.lastName + " " + s.studentId).toLowerCase().includes(searchTerm.toLowerCase())
@@ -62,8 +66,8 @@ export default function StudentsView() {
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Filter Bar */}
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex flex-1 items-center space-x-4">
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+                <div className="flex flex-col md:flex-row flex-1 items-stretch md:items-center gap-4">
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input
@@ -74,21 +78,38 @@ export default function StudentsView() {
                             className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                         />
                     </div>
-                    <div className="relative">
-                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
-                        <select
-                            value={filterSubject}
-                            onChange={(e) => setFilterSubject(e.target.value)}
-                            className="pl-12 pr-8 py-3 bg-emerald-50/50 border border-emerald-100 rounded-2xl text-sm font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
-                        >
-                            <option value="">All My Subjects</option>
-                            {teacherSubjects.map(sub => (
-                                <option key={sub} value={sub}>{sub}</option>
-                            ))}
-                        </select>
+                    
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                        <div className="relative w-full sm:w-auto">
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                            <select
+                                value={filterSubject}
+                                onChange={(e) => setFilterSubject(e.target.value)}
+                                className="w-full sm:w-auto pl-12 pr-10 py-3 bg-emerald-50/50 border border-emerald-100 rounded-2xl text-sm font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
+                            >
+                                <option value="">All Subjects</option>
+                                {teacherSubjects.map(sub => (
+                                    <option key={sub} value={sub}>{sub}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="relative w-full sm:w-auto">
+                            <GraduationCap className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600" />
+                            <select
+                                value={filterClass}
+                                onChange={(e) => setFilterClass(e.target.value)}
+                                className="w-full sm:w-auto pl-12 pr-10 py-3 bg-emerald-50/50 border border-emerald-100 rounded-2xl text-sm font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
+                            >
+                                <option value="">All Classes</option>
+                                {availableClasses.map(cls => (
+                                    <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest px-4">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest px-4 border-l border-slate-100 hidden xl:block">
                     {filteredStudents.length} Students found
                 </div>
             </div>
